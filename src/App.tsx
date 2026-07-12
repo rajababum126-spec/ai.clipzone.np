@@ -30,7 +30,9 @@ import {
   Play,
   ChevronLeft,
   ChevronRight,
-  Filter
+  Filter,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -85,19 +87,29 @@ export default function App() {
       try {
         const querySnapshot = await getDocs(collection(db, 'courses'));
         if (querySnapshot.empty) {
-          // If Firestore is empty, seed original static COURSES
-          for (const course of COURSES) {
+          // If Firestore is empty, seed original static COURSES with an initial order
+          const seeded = COURSES.map((course, idx) => ({
+            ...course,
+            order: idx
+          }));
+          for (const course of seeded) {
             await setDoc(doc(db, 'courses', course.id), course);
           }
-          setCourses(COURSES);
-          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(COURSES));
+          setCourses(seeded);
+          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(seeded));
         } else {
           const dbCourses: Course[] = [];
           querySnapshot.forEach((doc) => {
             dbCourses.push(doc.data() as Course);
           });
-          setCourses(dbCourses);
-          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(dbCourses));
+          // sort by order, default to alphabetical/id if not present
+          const sortedCourses = dbCourses.map((c, i) => ({
+            ...c,
+            order: typeof c.order === 'number' ? c.order : i
+          })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+          setCourses(sortedCourses);
+          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
         }
       } catch (err) {
         console.error('Failed to load courses from Firestore:', err);
@@ -105,6 +117,38 @@ export default function App() {
     };
     fetchCourses();
   }, []);
+
+  // Move Course Up / Down
+  const handleMoveCourse = async (currentIndex: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= courses.length) return;
+
+    const updatedCourses = [...courses];
+    
+    // Swap the courses in array
+    const temp = updatedCourses[currentIndex];
+    updatedCourses[currentIndex] = updatedCourses[targetIndex];
+    updatedCourses[targetIndex] = temp;
+
+    // Update their order values based on new indices
+    const finalizedCourses = updatedCourses.map((course, idx) => ({
+      ...course,
+      order: idx
+    }));
+
+    setCourses(finalizedCourses);
+    localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(finalizedCourses));
+
+    // Save changes to Firestore
+    try {
+      await setDoc(doc(db, 'courses', finalizedCourses[currentIndex].id), finalizedCourses[currentIndex]);
+      await setDoc(doc(db, 'courses', finalizedCourses[targetIndex].id), finalizedCourses[targetIndex]);
+      showToast('Course sequence moved successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to update course order in Firestore:', err);
+      showToast('Sequence updated locally but failed to sync online', 'error');
+    }
+  };
 
   // Course details modal state
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -224,6 +268,8 @@ export default function App() {
       .map(line => line.trim())
       .filter(line => line.length > 0);
 
+    const currentOrder = editingCourse && typeof editingCourse.order === 'number' ? editingCourse.order : courses.length;
+
     const updatedCourse: Course = {
       id: finalId,
       title: formTitle,
@@ -234,6 +280,7 @@ export default function App() {
       image: formImage,
       isPopular: formIsPopular,
       popularText: formIsPopular ? formPopularText : undefined,
+      order: currentOrder,
       videos: formVideos.length > 0 ? formVideos : [{ title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]
     };
 
@@ -739,19 +786,42 @@ export default function App() {
                   </button>
 
                   {isAdminActivated && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex gap-3">
-                      <button
-                        onClick={() => handleEditCourseClick(course)}
-                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        ✏️ Edit Course
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCourse(course.id)}
-                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        🗑️ Delete
-                      </button>
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleEditCourseClick(course)}
+                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          ✏️ Edit Course
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCourse(course.id)}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
+                      <div className="flex gap-2 justify-between items-center bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                        <span className="text-[10px] font-black uppercase text-slate-400 pl-1.5">Move/Reorder:</span>
+                        <div className="flex gap-1.5">
+                          <button
+                            disabled={index === 0}
+                            onClick={() => handleMoveCourse(index, 'up')}
+                            className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                            title="Move Course Up/Left"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            disabled={index === courses.length - 1}
+                            onClick={() => handleMoveCourse(index, 'down')}
+                            className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                            title="Move Course Down/Right"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

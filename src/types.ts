@@ -14,6 +14,7 @@ export interface Course {
   image: string;
   isPopular?: boolean;
   popularText?: string;
+  order?: number;
   videos: CourseVideo[];
 }
 

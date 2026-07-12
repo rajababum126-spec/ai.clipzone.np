@@ -76,6 +76,64 @@
         }
       },
       "required": ["code", "status", "duration", "createdAt"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Represents a dynamic course offered by AI Clipzone",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique course slug ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the course"
+        },
+        "price": {
+          "type": "string",
+          "description": "The displayed price tag of the course"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Numerical price value for calculation"
+        },
+        "message": {
+          "type": "string",
+          "description": "Suffix message for WhatsApp purchases"
+        },
+        "learn": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Key learn highlights of the course"
+        },
+        "image": {
+          "type": "string",
+          "description": "URL to the course display thumbnail"
+        },
+        "isPopular": {
+          "type": "boolean",
+          "description": "Whether this is marked as a popular bestseller"
+        },
+        "popularText": {
+          "type": "string",
+          "description": "Display banner text for popular courses"
+        },
+        "videos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "duration": { "type": "string" },
+              "videoUrl": { "type": "string" }
+            },
+            "required": ["title", "duration", "videoUrl"]
+          },
+          "description": "List of instructional videos in this course"
+        }
+      },
+      "required": ["id", "title", "price", "amount", "message", "learn", "image", "videos"]
     }
   },
   "firestore": {
@@ -86,6 +144,10 @@
     "activation_keys/{code}": {
       "schema": "ActivationKey",
       "description": "Collection tracking subscription activation codes"
+    },
+    "courses/{courseId}": {
+      "schema": "Course",
+      "description": "Collection tracking dynamic courses available for enrollment"
     }
   }
 }

@@ -35,8 +35,77 @@ import {
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
 import { Course, ChatMessage } from './types';
+import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
 export default function App() {
+  // Admin Mode states
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+  const [adminCodeInput, setAdminCodeInput] = useState('');
+  const [isAdminActivated, setIsAdminActivated] = useState(() => {
+    return localStorage.getItem('clipzone_admin_activated') === 'true';
+  });
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+
+  // Dynamic Courses state
+  const [courses, setCourses] = useState<Course[]>(() => {
+    const cached = localStorage.getItem('clipzone_dynamic_courses');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return COURSES;
+      }
+    }
+    return COURSES;
+  });
+
+  // Course Add/Edit modal state
+  const [showCourseFormModal, setShowCourseFormModal] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+
+  // Course Form Fields
+  const [formId, setFormId] = useState('');
+  const [formTitle, setFormTitle] = useState('');
+  const [formPrice, setFormPrice] = useState('Rs. ');
+  const [formAmount, setFormAmount] = useState(299);
+  const [formMessage, setFormMessage] = useState('');
+  const [formImage, setFormImage] = useState('');
+  const [formIsPopular, setFormIsPopular] = useState(false);
+  const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
+  const [formLearnText, setFormLearnText] = useState(''); // newline-separated
+  const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string }[]>([
+    { title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }
+  ]);
+
+  // Load courses from Firestore & seed if empty
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'courses'));
+        if (querySnapshot.empty) {
+          // If Firestore is empty, seed original static COURSES
+          for (const course of COURSES) {
+            await setDoc(doc(db, 'courses', course.id), course);
+          }
+          setCourses(COURSES);
+          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(COURSES));
+        } else {
+          const dbCourses: Course[] = [];
+          querySnapshot.forEach((doc) => {
+            dbCourses.push(doc.data() as Course);
+          });
+          setCourses(dbCourses);
+          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(dbCourses));
+        }
+      } catch (err) {
+        console.error('Failed to load courses from Firestore:', err);
+      }
+    };
+    fetchCourses();
+  }, []);
+
   // Course details modal state
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   // QR modal state
@@ -104,6 +173,115 @@ export default function App() {
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  // Trigger Edit Course Form
+  const handleEditCourseClick = (course: Course) => {
+    setEditingCourse(course);
+    setFormId(course.id);
+    setFormTitle(course.title);
+    setFormPrice(course.price);
+    setFormAmount(course.amount);
+    setFormMessage(course.message || `I want to buy ${course.title}`);
+    setFormImage(course.image);
+    setFormIsPopular(!!course.isPopular);
+    setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
+    setFormLearnText(course.learn.join('\n'));
+    setFormVideos(course.videos || []);
+    setShowCourseFormModal(true);
+  };
+
+  // Trigger Create Course Form
+  const handleCreateCourseClick = () => {
+    setEditingCourse(null);
+    setFormId('');
+    setFormTitle('');
+    setFormPrice('Rs. ');
+    setFormAmount(299);
+    setFormMessage('');
+    setFormImage('');
+    setFormIsPopular(false);
+    setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
+    setFormLearnText('');
+    setFormVideos([
+      { title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }
+    ]);
+    setShowCourseFormModal(true);
+  };
+
+  // Submit Course Form (Create/Edit)
+  const handleCourseFormSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!formTitle.trim() || !formPrice.trim() || !formImage.trim()) {
+      showToast('Please fill in all required fields (Title, Price, Image URL)', 'error');
+      return;
+    }
+
+    const finalId = editingCourse ? editingCourse.id : (formId.trim() || formTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    
+    const learnArray = formLearnText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    const updatedCourse: Course = {
+      id: finalId,
+      title: formTitle,
+      price: formPrice,
+      amount: Number(formAmount) || 299,
+      message: formMessage || `I want to buy ${formTitle}`,
+      learn: learnArray.length > 0 ? learnArray : ['Interactive AI Learning', 'Certificate of Completion Included', 'Lifetime Updates Access'],
+      image: formImage,
+      isPopular: formIsPopular,
+      popularText: formIsPopular ? formPopularText : undefined,
+      videos: formVideos.length > 0 ? formVideos : [{ title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]
+    };
+
+    try {
+      await setDoc(doc(db, 'courses', finalId), updatedCourse);
+      
+      setCourses(prev => {
+        const index = prev.findIndex(c => c.id === finalId);
+        let updatedList;
+        if (index >= 0) {
+          updatedList = [...prev];
+          updatedList[index] = updatedCourse;
+        } else {
+          updatedList = [...prev, updatedCourse];
+        }
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+        return updatedList;
+      });
+
+      showToast(editingCourse ? 'Course updated successfully!' : 'New course added successfully!', 'success');
+      setShowCourseFormModal(false);
+      setEditingCourse(null);
+    } catch (err) {
+      console.error('Failed to save course:', err);
+      showToast('Error saving course to Firestore', 'error');
+    }
+  };
+
+  // Delete Course
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!window.confirm('Are you sure you want to remove this course? This action is permanent.')) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'courses', courseId));
+      
+      setCourses(prev => {
+        const updatedList = prev.filter(c => c.id !== courseId);
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+        return updatedList;
+      });
+
+      showToast('Course removed successfully!', 'success');
+    } catch (err) {
+      console.error('Failed to delete course:', err);
+      showToast('Error deleting course from Firestore', 'error');
+    }
   };
 
   // Filter testimonials based on course category and search query
@@ -381,16 +559,65 @@ export default function App() {
       {/* Top Floating Banner with elegant gradient */}
       <div className="sticky top-0 z-[100] w-full bg-linear-to-r from-purple-800 via-indigo-900 to-purple-900 text-white shadow-md border-b border-purple-700/30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div 
+            onClick={() => setShowAdminMenu(!showAdminMenu)}
+            className="flex items-center gap-3 cursor-pointer select-none relative group"
+            title="Click logo for Admin options"
+          >
             <img 
               src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhVG6Fh_bUev_FEchbwGJsmVz3s92FK-6lTlHj-sbYBguGhsYp8O3_J7c_SOfvnXCSWWHjLjqoeorMTcWQeac1CbhIaYtgfmHrYz44urYRSjlmrrNPoe9bMVCvcoTllNI4JaajsRwwMmuyvpUpaFs3r3UJs-4d6UuW0AmES38d4115LxC4Vsx76Wf6KW4v8/s1600/12844.png" 
               alt="AI Clipzone Logo"
               referrerPolicy="no-referrer"
-              className="w-10 h-10 object-contain rounded-full border border-amber-400/50 shadow-sm bg-slate-900/40 p-0.5"
+              className="w-10 h-10 object-contain rounded-full border border-amber-400/50 shadow-sm bg-slate-900/40 p-0.5 group-hover:scale-105 transition-transform"
             />
-            <h1 className="text-lg md:text-xl font-extrabold tracking-tight">
+            <h1 className="text-lg md:text-xl font-extrabold tracking-tight flex items-center gap-1">
               AI Clipzone <span className="text-amber-400">Nepal</span> 🇳🇵
+              {isAdminActivated && (
+                <span className="bg-amber-400 text-slate-950 text-[10px] px-1.5 py-0.5 rounded-md font-black shadow-xs ml-1 uppercase">Admin</span>
+              )}
             </h1>
+
+            {showAdminMenu && (
+              <div className="absolute top-12 left-0 z-[1000] w-52 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-1.5 font-bold text-xs text-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
+                {!isAdminActivated ? (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAdminMenu(false);
+                      setShowAdminLoginModal(true);
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    ⚙️ Admin Login
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowAdminMenu(false);
+                        handleCreateCourseClick();
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      ➕ Add New Course
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsAdminActivated(false);
+                        localStorage.removeItem('clipzone_admin_activated');
+                        setShowAdminMenu(false);
+                        showToast('Logged out of Admin mode', 'info');
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-950/30 hover:text-rose-300 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800/80 mt-1"
+                    >
+                      🚪 Exit Admin Mode
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
           <div className="hidden sm:flex items-center gap-4 text-xs font-semibold text-purple-100 bg-purple-950/40 px-3 py-1.5 rounded-full border border-purple-500/30">
             <span className="flex h-2 w-2 relative">
@@ -433,9 +660,9 @@ export default function App() {
 
         {/* Courses Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
-          {COURSES.map((course, index) => (
+          {courses.map((course, index) => (
             <motion.div
-              key={index}
+              key={course.id}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-50px' }}
@@ -489,7 +716,7 @@ export default function App() {
 
                   <p className="text-slate-500 text-xs md:text-sm mt-3 font-semibold flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                    Language: {index === 0 ? 'Hindi' : 'Nepali'} • Includes Certificate
+                    Language: {course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi' : 'Nepali'} • Includes Certificate
                   </p>
 
                   {/* Highlights checklist */}
@@ -510,10 +737,44 @@ export default function App() {
                   >
                     Enroll Now / View Details
                   </button>
+
+                  {isAdminActivated && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex gap-3">
+                      <button
+                        onClick={() => handleEditCourseClick(course)}
+                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        ✏️ Edit Course
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCourse(course.id)}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
           ))}
+
+          {isAdminActivated && (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-50px' }}
+              whileHover={{ scale: 1.01 }}
+              onClick={handleCreateCourseClick}
+              className="bg-slate-50 hover:bg-slate-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md border-2 border-dashed border-slate-300 hover:border-purple-500 transition-all duration-300 flex flex-col items-center justify-center p-8 text-center min-h-[350px] cursor-pointer group"
+            >
+              <div className="w-16 h-16 bg-purple-50 border border-purple-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-purple-600">
+                <Plus className="w-8 h-8" />
+              </div>
+              <strong className="text-lg font-black text-slate-800 block">Add Another Course</strong>
+              <span className="text-xs text-slate-500 mt-2 block max-w-xs">Click here to dynamically add a new course with custom pricing, learn checklist, and videos to Firestore database.</span>
+            </motion.div>
+          )}
         </div>
 
         {/* Testimonial slider / carousel - ADVANCED BENTO FEEDBOARD */}
@@ -1282,6 +1543,372 @@ export default function App() {
                   Cancel
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ADMIN SECRET CODE MODAL */}
+      <AnimatePresence>
+        {showAdminLoginModal && (
+          <div className="fixed inset-0 z-[2500] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAdminLoginModal(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-slate-900 text-white max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-slate-800 animate-in zoom-in-95 duration-200"
+            >
+              <button 
+                onClick={() => setShowAdminLoginModal(false)}
+                className="absolute top-5 right-5 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-12 h-12 bg-purple-500/15 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4 text-purple-400">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+
+              <h3 className="text-xl font-black text-center text-white tracking-tight">
+                Admin Verification
+              </h3>
+              <p className="text-xs text-slate-400 text-center mt-1.5 font-medium">
+                Enter the secret activation key to enable administrator controls.
+              </p>
+
+              <div className="mt-6">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2 text-left">
+                  Secret Activation Key *
+                </label>
+                <input 
+                  type="password"
+                  value={adminCodeInput}
+                  onChange={(e) => setAdminCodeInput(e.target.value)}
+                  placeholder="Enter secret activation key..."
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 transition outline-hidden font-mono"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (adminCodeInput.trim().toUpperCase() === 'AI12X') {
+                        setIsAdminActivated(true);
+                        localStorage.setItem('clipzone_admin_activated', 'true');
+                        setShowAdminLoginModal(false);
+                        setAdminCodeInput('');
+                        showToast('Admin Mode activated successfully!', 'success');
+                      } else {
+                        showToast('Invalid activation key. Please try again.', 'error');
+                      }
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="mt-8 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    if (adminCodeInput.trim().toUpperCase() === 'AI12X') {
+                      setIsAdminActivated(true);
+                      localStorage.setItem('clipzone_admin_activated', 'true');
+                      setShowAdminLoginModal(false);
+                      setAdminCodeInput('');
+                      showToast('Admin Mode activated successfully!', 'success');
+                    } else {
+                      showToast('Invalid activation key. Please try again.', 'error');
+                    }
+                  }}
+                  className="w-full bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition shadow-lg cursor-pointer text-center"
+                >
+                  Admin Activate
+                </button>
+                <button
+                  onClick={() => setShowAdminLoginModal(false)}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3.5 px-4 rounded-xl text-sm transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ADD / EDIT COURSE FORM MODAL */}
+      <AnimatePresence>
+        {showCourseFormModal && (
+          <div className="fixed inset-0 z-[2500] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setShowCourseFormModal(false);
+                setEditingCourse(null);
+              }}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white max-w-lg w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 max-h-[90vh] overflow-y-auto border border-slate-100 flex flex-col animate-in zoom-in-95 duration-200"
+            >
+              <button 
+                onClick={() => {
+                  setShowCourseFormModal(false);
+                  setEditingCourse(null);
+                }}
+                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <span className="inline-block bg-purple-100 text-purple-800 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3 self-start">
+                {editingCourse ? 'Edit Course' : 'Create New Course'}
+              </span>
+
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                {editingCourse ? 'Update Course Details' : 'Add Dynamic Course'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 font-medium">
+                Fill out the specifications below. The course catalog will update in Firestore instantly.
+              </p>
+
+              <form onSubmit={handleCourseFormSubmit} className="space-y-4 mt-6">
+                {/* Course ID/Slug (if creating new) */}
+                {!editingCourse && (
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Course Slug ID (Optional - Auto generated from Title)</label>
+                    <input 
+                      type="text"
+                      value={formId}
+                      onChange={(e) => setFormId(e.target.value)}
+                      placeholder="e.g. youtube-blueprint"
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs transition outline-hidden font-mono text-slate-700"
+                    />
+                  </div>
+                )}
+
+                {/* Course Title */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Course Title *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                    placeholder="e.g. Dhruv Rathee YouTube Blueprint Course"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 transition outline-hidden"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Price Display Tag */}
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Price Display tag *</label>
+                    <input 
+                      type="text"
+                      required
+                      value={formPrice}
+                      onChange={(e) => setFormPrice(e.target.value)}
+                      placeholder="e.g. Rs. 549"
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 transition outline-hidden"
+                    />
+                  </div>
+
+                  {/* Numerical Price Value */}
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Amount for QR Checkout *</label>
+                    <input 
+                      type="number"
+                      required
+                      value={formAmount}
+                      onChange={(e) => setFormAmount(Number(e.target.value))}
+                      placeholder="e.g. 549"
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 transition outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* WhatsApp Message */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">WhatsApp Message Suffix</label>
+                  <input 
+                    type="text"
+                    value={formMessage}
+                    onChange={(e) => setFormMessage(e.target.value)}
+                    placeholder="e.g. I want to buy Dhruv Rathee YouTube Blueprint course"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-800 transition outline-hidden"
+                  />
+                </div>
+
+                {/* Course Thumbnail Image URL */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Thumbnail Image URL *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={formImage}
+                    onChange={(e) => setFormImage(e.target.value)}
+                    placeholder="e.g. https://blogger.googleusercontent.com/..."
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-800 transition outline-hidden"
+                  />
+                  <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => setFormImage('https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgXZL_14KcAVWtUkV6YOCtIePNyDndSmM7r8dFVVyp1QXLTKJzStC3O1pSK3-pwsFKhOE0RLyPfXYUo_S6ARYjLWBuRH0Ao5hipjntJKBptoXhsNU584o_EKJb-JfmGyzn57edya_hzH9RqwBvtQjwGaMIasclVW5BGKE0Uef6nDSgBiqr7diao-4seXWlX/s1600/12843.jpg')}
+                      className="bg-slate-100 hover:bg-slate-200 text-[9px] font-bold px-2 py-1 rounded-md shrink-0 transition cursor-pointer"
+                    >
+                      Dhruv Rathee BG
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormImage('https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhVG6Fh_bUev_FEchbwGJsmVz3s92FK-6lTlHj-sbYBguGhsYp8O3_J7c_SOfvnXCSWWHjLjqoeorMTcWQeac1CbhIaYtgfmHrYz44urYRSjlmrrNPoe9bMVCvcoTllNI4JaajsRwwMmuyvpUpaFs3r3UJs-4d6UuW0AmES38d4115LxC4Vsx76Wf6KW4v8/s1600/12844.png')}
+                      className="bg-slate-100 hover:bg-slate-200 text-[9px] font-bold px-2 py-1 rounded-md shrink-0 transition cursor-pointer"
+                    >
+                      Logo Asset
+                    </button>
+                  </div>
+                </div>
+
+                {/* Popular Badge Configuration */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input 
+                      type="checkbox"
+                      checked={formIsPopular}
+                      onChange={(e) => setFormIsPopular(e.target.checked)}
+                      className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 w-4 h-4"
+                    />
+                    <span>Highlight as Popular Bestseller Banner</span>
+                  </label>
+                  {formIsPopular && (
+                    <div className="mt-2">
+                      <label className="block text-[9px] font-black uppercase text-slate-400 mb-1">Bestseller Banner Text</label>
+                      <input 
+                        type="text"
+                        value={formPopularText}
+                        onChange={(e) => setFormPopularText(e.target.value)}
+                        placeholder="🔥 MOST POPULAR - BEST SELLER"
+                        className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 transition outline-hidden"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* What You Learn (Newline separated) */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">What Students Learn (One point per line) *</label>
+                  <textarea 
+                    rows={4}
+                    required
+                    value={formLearnText}
+                    onChange={(e) => setFormLearnText(e.target.value)}
+                    placeholder="💡 Video idea खोज्ने तरिका&#10;✍️ Script writing र storytelling&#10;🎥 Shooting र presentation&#10;✂️ Editing skills"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-800 transition outline-hidden leading-relaxed"
+                  />
+                </div>
+
+                {/* Video Lectures Manager */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-[10px] font-black uppercase text-slate-400">Course Video Lectures ({formVideos.length})</label>
+                    <button
+                      type="button"
+                      onClick={() => setFormVideos([...formVideos, { title: '', duration: '10:00', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }])}
+                      className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-black px-2.5 py-1 rounded-md transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add Lecture
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 max-h-40 overflow-y-auto pr-1">
+                    {formVideos.map((video, idx) => (
+                      <div key={idx} className="bg-white p-3 rounded-lg border border-slate-100 space-y-2 relative shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => setFormVideos(formVideos.filter((_, vidx) => vidx !== idx))}
+                          className="absolute top-2 right-2 text-rose-500 hover:text-rose-700 p-0.5 cursor-pointer"
+                          title="Remove Lecture"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+
+                        <div>
+                          <input 
+                            type="text"
+                            required
+                            placeholder="Lecture Title (e.g. Introduction)"
+                            value={video.title}
+                            onChange={(e) => {
+                              const updated = [...formVideos];
+                              updated[idx].title = e.target.value;
+                              setFormVideos(updated);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-[11px] font-semibold text-slate-800 outline-hidden focus:border-purple-500"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input 
+                            type="text"
+                            required
+                            placeholder="Duration (e.g. 12:15)"
+                            value={video.duration}
+                            onChange={(e) => {
+                              const updated = [...formVideos];
+                              updated[idx].duration = e.target.value;
+                              setFormVideos(updated);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-hidden focus:border-purple-500"
+                          />
+                          <input 
+                            type="text"
+                            required
+                            placeholder="Drive Preview Link"
+                            value={video.videoUrl}
+                            onChange={(e) => {
+                              const updated = [...formVideos];
+                              updated[idx].videoUrl = e.target.value;
+                              setFormVideos(updated);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-hidden focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm shadow-md transition cursor-pointer text-center"
+                  >
+                    {editingCourse ? '💾 Save Changes' : '🚀 Publish Course'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCourseFormModal(false);
+                      setEditingCourse(null);
+                    }}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-xl text-sm transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

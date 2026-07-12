@@ -67,6 +67,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isAdmin();
     }
 
+    // Security rules for dynamic courses catalog
+    match /courses/{courseId} {
+      allow read, write: if true;
+    }
+
     // Global default catch-all: deny all other paths
     match /{document=**} {
       allow read, write: if false;

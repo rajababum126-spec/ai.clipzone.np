@@ -32,7 +32,8 @@ import {
   ChevronRight,
   Filter,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  QrCode
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -568,7 +569,6 @@ export default function App() {
 
   // Open QR modal from Course Modal
   const handleOpenFonePayQR = () => {
-    setSelectedCourse(null); // close main course modal
     setShowQrModal(true);
   };
 
@@ -578,6 +578,7 @@ export default function App() {
     const message = `I have purchased the "${selectedCourse.title}" course and paid ${selectedCourse.price} via QR/eSewa. Please provide the course access link!`;
     window.open(`https://wa.me/9779763323268?text=${encodeURIComponent(message)}`, '_blank');
     setShowQrModal(false);
+    setSelectedCourse(null);
     showToast('Payment confirmation message sent on WhatsApp!', 'success');
   };
 
@@ -1472,7 +1473,7 @@ export default function App() {
 
       {/* COURSE DETAILS MODAL */}
       <AnimatePresence>
-        {selectedCourse && (
+        {selectedCourse && !showQrModal && (
           <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
             {/* Backdrop */}
             <motion.div 

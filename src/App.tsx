@@ -33,13 +33,62 @@ import {
   Filter,
   ArrowUp,
   ArrowDown,
-  QrCode
+  QrCode,
+  Home,
+  Menu
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
 import { Course, ChatMessage } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error Details:', JSON.stringify(errInfo, null, 2));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export default function App() {
   // Admin Mode states
@@ -114,6 +163,7 @@ export default function App() {
         }
       } catch (err) {
         console.error('Failed to load courses from Firestore:', err);
+        handleFirestoreError(err, OperationType.GET, 'courses');
       }
     };
     fetchCourses();
@@ -147,7 +197,9 @@ export default function App() {
       showToast('Course sequence moved successfully!', 'success');
     } catch (err) {
       console.error('Failed to update course order in Firestore:', err);
-      showToast('Sequence updated locally but failed to sync online', 'error');
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      showToast(`Sequence updated locally but failed to sync online: ${errorMessage}`, 'error');
+      handleFirestoreError(err, OperationType.UPDATE, 'courses');
     }
   };
 
@@ -155,8 +207,21 @@ export default function App() {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   // QR modal state
   const [showQrModal, setShowQrModal] = useState(false);
+  // Inline QR mode state
+  const [showQrInline, setShowQrInline] = useState(false);
+  // User navigation menu state
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  // User profile modal state
+  const [showProfileModal, setShowProfileModal] = useState(false);
   // Canvas ref for FonePay QR
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Reset inline QR mode when modal changes
+  useEffect(() => {
+    if (!selectedCourse) {
+      setShowQrInline(false);
+    }
+  }, [selectedCourse]);
 
   // FAQ open indexes
   const [openFaqs, setOpenFaqs] = useState<Record<number, boolean>>({});
@@ -197,6 +262,8 @@ export default function App() {
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactMsg, setContactMsg] = useState('');
+
+
 
   // Toast banner state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -262,7 +329,16 @@ export default function App() {
       return;
     }
 
-    const finalId = editingCourse ? editingCourse.id : (formId.trim() || formTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    // Ensure finalId is never empty, and handle non-latin characters elegantly
+    let finalId = editingCourse ? editingCourse.id : formId.trim();
+    if (!finalId) {
+      const cleanTitle = formTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, ' ')
+        .trim()
+        .replace(/\s+/g, '-');
+      finalId = cleanTitle || `course-${Date.now()}`;
+    }
     
     const learnArray = formLearnText
       .split('\n')
@@ -306,7 +382,9 @@ export default function App() {
       setEditingCourse(null);
     } catch (err) {
       console.error('Failed to save course:', err);
-      showToast('Error saving course to Firestore', 'error');
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      showToast(`Error saving course to Firestore: ${errorMessage}`, 'error');
+      handleFirestoreError(err, editingCourse ? OperationType.UPDATE : OperationType.CREATE, `courses/${finalId}`);
     }
   };
 
@@ -328,7 +406,9 @@ export default function App() {
       showToast('Course removed successfully!', 'success');
     } catch (err) {
       console.error('Failed to delete course:', err);
-      showToast('Error deleting course from Firestore', 'error');
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      showToast(`Error deleting course from Firestore: ${errorMessage}`, 'error');
+      handleFirestoreError(err, OperationType.DELETE, `courses/${courseId}`);
     }
   };
 
@@ -376,9 +456,9 @@ export default function App() {
     }
   }, [filteredTestimonials.length, currentSlide]);
 
-  // Render QR Code inside canvas once QR modal opens
+  // Render QR Code inside canvas once QR modal opens or inline QR is activated
   useEffect(() => {
-    if (showQrModal && selectedCourse && qrCanvasRef.current) {
+    if ((showQrModal || showQrInline) && selectedCourse && qrCanvasRef.current) {
       // payload from original code
       const qrPayload = "00020101021126350011fonepay.com071622226100158730565204527153035245802NP5915Prakash Store 16012Pokhariya MC62110707162568663048986";
       QRCode.toCanvas(
@@ -400,7 +480,7 @@ export default function App() {
         }
       );
     }
-  }, [showQrModal, selectedCourse]);
+  }, [showQrModal, showQrInline, selectedCourse]);
 
   // Scroll to bottom of chat
   useEffect(() => {
@@ -674,179 +754,240 @@ export default function App() {
             </span>
             Nepal's #1 AI Academy • Trusted by 1000+ Students
           </div>
-          <a 
-            href="https://wa.me/9779763323268" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            title="WhatsApp Support"
-            className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white transition duration-200 shadow-lg shadow-emerald-500/20 flex items-center justify-center hover:scale-105 shrink-0"
-          >
-            <svg 
-              viewBox="0 0 24 24" 
-              fill="currentColor" 
-              className="w-5.5 h-5.5"
+          <div className="flex items-center gap-3">
+            <a 
+              href="https://wa.me/9779763323268" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              title="WhatsApp Support"
+              className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white transition duration-200 shadow-lg shadow-emerald-500/20 flex items-center justify-center hover:scale-105 shrink-0"
             >
-              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.717-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.588 2.019 14.12 1 11.48 1c-5.44 0-9.866 4.372-9.87 9.802 0 1.96.512 3.878 1.483 5.581l-.975 3.563 3.664-.949zm12.333-5.068c-.326-.161-1.929-.938-2.228-1.046-.299-.109-.517-.161-.734.161-.217.323-.841 1.046-1.031 1.262-.19.217-.381.244-.707.082-.326-.161-1.378-.501-2.624-1.597-.969-.854-1.623-1.909-1.813-2.231-.19-.323-.02-.497.142-.658.146-.145.326-.376.49-.564.163-.189.217-.324.326-.541.109-.217.054-.407-.027-.569-.081-.162-.734-1.74-.1005-2.39-.292-.705-.664-.609-.914-.609h-.78c-.272 0-.713.101-1.086.502-.373.402-1.425 1.375-1.425 3.353 0 1.977 1.451 3.886 1.654 4.156.204.27 2.856 4.305 6.918 6.023.966.409 1.72.653 2.308.837.97.305 1.854.263 2.551.16.778-.115 2.392-.962 2.731-1.892.34-.93.34-1.728.238-1.89-.101-.163-.38-.244-.707-.406z"/>
-            </svg>
-          </a>
+              <MessageSquare className="w-5 h-5" />
+            </a>
+
+            {/* Dropdown Menu Button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-10 h-10 rounded-full bg-purple-950/60 border border-purple-500/30 text-white hover:bg-purple-900 transition flex items-center justify-center cursor-pointer select-none"
+                title="Menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    className="absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-slate-100 flex flex-col gap-1"
+                  >
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        showToast('Welcome Home! 🏠', 'info');
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      🏠 Home Page
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        const catalogElement = document.getElementById('courses-section');
+                        if (catalogElement) {
+                          catalogElement.scrollIntoView({ behavior: 'smooth' });
+                          showToast('Sifting through Courses! 📚', 'info');
+                        }
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      📚 Course Page
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setShowProfileModal(true);
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      👤 Profile Page
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Main Container for Course List */}
       <main className="max-w-6xl mx-auto px-4 py-12">
-        {/* Course Catalog Title */}
-        <div className="text-center mb-12">
-          <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-2">
-            <BookOpen className="w-7 h-7 text-purple-600" />
-            Our Premium AI Courses
-          </h3>
-          <div className="w-24 h-1.5 bg-amber-500 mx-auto rounded-full mt-3"></div>
-          <p className="text-slate-500 mt-3 text-sm md:text-base">
-            तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
-          </p>
-        </div>
 
-        {/* Courses Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
-          {courses.map((course, index) => (
-            <motion.div
-              key={course.id}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-50px' }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ y: -6 }}
-              className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full"
-            >
-              {course.isPopular && (
-                <div className="absolute top-0 inset-x-0 bg-rose-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
-                  {course.popularText || '🔥 MOST POPULAR - BEST SELLER'}
-                </div>
-              )}
 
-              {/* Course Thumbnail Image */}
-              <div className="relative aspect-video overflow-hidden bg-slate-950">
-                <img 
-                  src={course.image} 
-                  alt={course.title}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
-                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                  <span className="bg-purple-950/80 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-lg border border-purple-500/20">
-                    Lifetime Access
-                  </span>
-                  <span className="bg-amber-500 text-slate-950 text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
-                    Instant Delivery
-                  </span>
-                </div>
-              </div>
 
-              {/* Course Info */}
-              <div className="p-6 md:p-8 flex flex-col grow justify-between">
-                <div>
-                  <h4 className="text-xl md:text-2xl font-extrabold text-slate-900 group-hover:text-purple-700 transition-colors">
-                    {course.title}
-                  </h4>
-                  
-                  {/* Prices */}
-                  <div className="mt-4 flex items-baseline gap-2.5">
-                    <span className="text-2xl md:text-3xl font-black text-purple-700">
-                      {course.price}
+        {/* Course Catalog Title & Grid Section */}
+        <section id="courses-section" className="pt-10 scroll-mt-24">
+          <div className="text-center mb-12">
+            <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-2">
+              <BookOpen className="w-7 h-7 text-purple-600" />
+              Our Premium AI Courses
+            </h3>
+            <div className="w-24 h-1.5 bg-amber-500 mx-auto rounded-full mt-3"></div>
+            <p className="text-slate-500 mt-3 text-sm md:text-base">
+              तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
+            </p>
+          </div>
+
+          {/* Courses Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
+            {courses.map((course, index) => (
+              <motion.div
+                key={course.id}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ y: -6 }}
+                className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full"
+              >
+                {course.isPopular && (
+                  <div className="absolute top-0 inset-x-0 bg-rose-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
+                    {course.popularText || '🔥 MOST POPULAR - BEST SELLER'}
+                  </div>
+                )}
+
+                {/* Course Thumbnail Image */}
+                <div className="relative aspect-video overflow-hidden bg-slate-950">
+                  <img 
+                    src={course.image} 
+                    alt={course.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
+                  <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                    <span className="bg-purple-950/80 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-lg border border-purple-500/20">
+                      Lifetime Access
                     </span>
-                    {course.isPopular && (
-                      <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
-                        Price Rs. 1000
+                    <span className="bg-amber-500 text-slate-950 text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
+                      Instant Delivery
+                    </span>
+                  </div>
+                </div>
+
+                {/* Course Info */}
+                <div className="p-6 md:p-8 flex flex-col grow justify-between">
+                  <div>
+                    <h4 className="text-xl md:text-2xl font-extrabold text-slate-900 group-hover:text-purple-700 transition-colors">
+                      {course.title}
+                    </h4>
+                    
+                    {/* Prices */}
+                    <div className="mt-4 flex items-baseline gap-2.5">
+                      <span className="text-2xl md:text-3xl font-black text-purple-700">
+                        {course.price}
                       </span>
-                    )}
+                      {course.isPopular && (
+                        <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
+                          Price Rs. 1000
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-slate-500 text-xs md:text-sm mt-3 font-semibold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                      Language: {course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi' : 'Nepali'} • Includes Certificate
+                    </p>
+
+                    {/* Highlights checklist */}
+                    <ul className="mt-6 space-y-2.5">
+                      {course.learn.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-slate-600 text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
 
-                  <p className="text-slate-500 text-xs md:text-sm mt-3 font-semibold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                    Language: {course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi' : 'Nepali'} • Includes Certificate
-                  </p>
+                  <div className="mt-8">
+                    <button 
+                      onClick={() => setSelectedCourse(course)}
+                      className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center"
+                    >
+                      Enroll Now / View Details
+                    </button>
 
-                  {/* Highlights checklist */}
-                  <ul className="mt-6 space-y-2.5">
-                    {course.learn.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-slate-600 text-sm">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mt-8">
-                  <button 
-                    onClick={() => setSelectedCourse(course)}
-                    className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center"
-                  >
-                    Enroll Now / View Details
-                  </button>
-
-                  {isAdminActivated && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => handleEditCourseClick(course)}
-                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          ✏️ Edit Course
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCourse(course.id)}
-                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          🗑️ Delete
-                        </button>
-                      </div>
-                      <div className="flex gap-2 justify-between items-center bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                        <span className="text-[10px] font-black uppercase text-slate-400 pl-1.5">Move/Reorder:</span>
-                        <div className="flex gap-1.5">
+                    {isAdminActivated && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                        <div className="flex gap-3">
                           <button
-                            disabled={index === 0}
-                            onClick={() => handleMoveCourse(index, 'up')}
-                            className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                            title="Move Course Up/Left"
+                            onClick={() => handleEditCourseClick(course)}
+                            className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <ArrowUp className="w-3.5 h-3.5" />
+                            ✏️ Edit Course
                           </button>
                           <button
-                            disabled={index === courses.length - 1}
-                            onClick={() => handleMoveCourse(index, 'down')}
-                            className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                            title="Move Course Down/Right"
+                            onClick={() => handleDeleteCourse(course.id)}
+                            className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <ArrowDown className="w-3.5 h-3.5" />
+                            🗑️ Delete
                           </button>
                         </div>
+                        <div className="flex gap-2 justify-between items-center bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                          <span className="text-[10px] font-black uppercase text-slate-400 pl-1.5">Move/Reorder:</span>
+                          <div className="flex gap-1.5">
+                            <button
+                              disabled={index === 0}
+                              onClick={() => handleMoveCourse(index, 'up')}
+                              className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                              title="Move Course Up/Left"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              disabled={index === courses.length - 1}
+                              onClick={() => handleMoveCourse(index, 'down')}
+                              className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                              title="Move Course Down/Right"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))}
 
-          {isAdminActivated && (
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-50px' }}
-              whileHover={{ scale: 1.01 }}
-              onClick={handleCreateCourseClick}
-              className="bg-slate-50 hover:bg-slate-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md border-2 border-dashed border-slate-300 hover:border-purple-500 transition-all duration-300 flex flex-col items-center justify-center p-8 text-center min-h-[350px] cursor-pointer group"
-            >
-              <div className="w-16 h-16 bg-purple-50 border border-purple-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-purple-600">
-                <Plus className="w-8 h-8" />
-              </div>
-              <strong className="text-lg font-black text-slate-800 block">Add Another Course</strong>
-              <span className="text-xs text-slate-500 mt-2 block max-w-xs">Click here to dynamically add a new course with custom pricing, learn checklist, and videos to Firestore database.</span>
-            </motion.div>
-          )}
-        </div>
+            {isAdminActivated && (
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-50px' }}
+                whileHover={{ scale: 1.01 }}
+                onClick={handleCreateCourseClick}
+                className="bg-slate-50 hover:bg-slate-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md border-2 border-dashed border-slate-300 hover:border-purple-500 transition-all duration-300 flex flex-col items-center justify-center p-8 text-center min-h-[350px] cursor-pointer group"
+              >
+                <div className="w-16 h-16 bg-purple-50 border border-purple-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-purple-600">
+                  <Plus className="w-8 h-8" />
+                </div>
+                <strong className="text-lg font-black text-slate-800 block">Add Another Course</strong>
+                <span className="text-xs text-slate-500 mt-2 block max-w-xs">Click here to dynamically add a new course with custom pricing, learn checklist, and videos to Firestore database.</span>
+              </motion.div>
+            )}
+          </div>
+        </section>
+
+        {/* Testimonials, FAQs, and contact form sequential flows */}
+        <div className="space-y-20 animate-in fade-in duration-300">
 
         {/* Testimonial slider / carousel - ADVANCED BENTO FEEDBOARD */}
         <section className="mt-20">
@@ -1447,6 +1588,7 @@ export default function App() {
 
           </div>
         </section>
+          </div>
 
       </main>
 
@@ -1535,23 +1677,152 @@ export default function App() {
               </div>
 
               {/* Purchase options CTA */}
-              <div className="mt-8 flex flex-col gap-3">
-                <a 
-                  href={`https://wa.me/9779763323268?text=${encodeURIComponent(selectedCourse.message)}`}
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2"
+              {showQrInline ? (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mt-6 border-t border-slate-100 pt-6 text-center"
                 >
-                  <Send className="w-4 h-4" /> WhatsApp बाट किन्नुहोस्
-                </a>
-                
-                <button 
-                  onClick={handleOpenFonePayQR}
-                  className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Khalti)</span>
-                </button>
+                  <h4 className="text-base font-black text-slate-900 flex items-center justify-center gap-2">
+                    <QrCode className="w-5 h-5 text-purple-700 animate-pulse" />
+                    Scan to Pay (eSewa / Khalti / Mobile Banking)
+                  </h4>
+                  <p className="text-xs text-slate-500 font-semibold mt-1">
+                    यो QR स्क्यान गरी {selectedCourse.price} भुक्तानी गर्नुहोस्
+                  </p>
+
+                  {/* QR Code Canvas */}
+                  <div className="my-5 p-3.5 bg-slate-50 border border-slate-100 rounded-2xl inline-block shadow-inner">
+                    <canvas ref={qrCanvasRef} className="mx-auto max-w-[220px]" />
+                  </div>
+
+                  <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200/50 text-[11px] text-amber-800 font-bold leading-normal mb-5 text-left">
+                    📌 भुक्तानी सफल भएपछि स्क्रिनसट लिनुहोस् र तलको हरियो बटन थिचेर हामीलाई WhatsApp मा पठाउनुहोस्। त्यसपछि तपाईंको कोर्ष तत्काल सक्रिय हुनेछ।
+                  </div>
+
+                  <div className="flex flex-col gap-2.5">
+                    <button 
+                      onClick={handleConfirmPayment}
+                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-3.5 px-6 rounded-xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" /> भुक्तानी गरेँ, WhatsApp मा पठाउनुहोस्
+                    </button>
+                    
+                    <button 
+                      onClick={() => setShowQrInline(false)}
+                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-center transition cursor-pointer"
+                    >
+                      पछाडि फर्कनुहोस् (Go Back)
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="mt-8 flex flex-col gap-3">
+                  <a 
+                    href={`https://wa.me/9779763323268?text=${encodeURIComponent(selectedCourse.message)}`}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2"
+                  >
+                    <Send className="w-4 h-4" /> WhatsApp बाट किन्नुहोस्
+                  </a>
+                  
+                  <button 
+                    onClick={() => setShowQrInline(true)}
+                    className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Khalti)</span>
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* USER PROFILE MODAL */}
+      <AnimatePresence>
+        {showProfileModal && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowProfileModal(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100 text-slate-800"
+            >
+              <button 
+                onClick={() => setShowProfileModal(false)}
+                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <span className="inline-block bg-purple-100 text-purple-800 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3">
+                👤 Student Profile
+              </span>
+
+              <div className="flex items-center gap-4 mt-2">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-800 text-white flex items-center justify-center text-xl font-black shadow-md">
+                  ST
+                </div>
+                <div className="text-left">
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                    Clipzone Student
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-400 mt-0.5">student@aiclipzone.com</p>
+                  <p className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-extrabold inline-block mt-1.5 uppercase tracking-wider">Verified Learner</p>
+                </div>
               </div>
+
+              <div className="mt-8 space-y-4 text-left">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Current Enrollment</span>
+                  <div className="flex items-center gap-3 mt-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
+                      📖
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-extrabold text-slate-800">YouTube Blueprint Course</h4>
+                      <p className="text-[10px] text-emerald-600 font-bold mt-0.5">🟢 Lifetime Active Access</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Account Specifications</span>
+                  <div className="grid grid-cols-2 gap-4 mt-2 text-xs font-bold">
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase">Registered:</span>
+                      <span className="text-slate-700 font-extrabold">July 2026</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px] uppercase">Country:</span>
+                      <span className="text-slate-700 font-extrabold">Nepal 🇳🇵</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-200/50 text-[11px] text-amber-800 font-bold leading-normal text-left">
+                📌 यो प्रोफाइल पेजको नमुना हो। आगामी दिनहरूमा यसमा अरु थप विवरण वा सुविधाहरू थप्नको लागि कृपया मलाई भन्नुहोस्!
+              </div>
+
+              <button 
+                onClick={() => setShowProfileModal(false)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition mt-6 cursor-pointer"
+              >
+                Close Profile
+              </button>
             </motion.div>
           </div>
         )}

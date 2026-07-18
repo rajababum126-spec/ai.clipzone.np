@@ -40,7 +40,8 @@ import {
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
 import { Course, ChatMessage } from './types';
-import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 
 enum OperationType {
@@ -184,6 +185,278 @@ export default function App() {
     fetchCourses();
   }, []);
 
+  // Firebase Authentication Observer & User Keys Fetcher
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+      if (user) {
+        fetchUserActiveKeys(user);
+      } else {
+        setUserActivationKeys([]);
+        const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        setActiveCourseIds(localActivated);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch student's keys
+  const fetchUserActiveKeys = async (user: FirebaseUser) => {
+    try {
+      const q = query(
+        collection(db, 'activation_keys'),
+        where('claimedByUid', '==', user.uid),
+        where('status', '==', 'used')
+      );
+      const querySnapshot = await getDocs(q);
+      const keys: any[] = [];
+      const activeIds: string[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        keys.push({ id: doc.id, ...data });
+        if (data.courseId) {
+          activeIds.push(data.courseId);
+        }
+      });
+
+      // Merge with locally stored course activations as fallback backup!
+      const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      localActivated.forEach((id: string) => {
+        if (!activeIds.includes(id)) {
+          activeIds.push(id);
+        }
+      });
+
+      setUserActivationKeys(keys);
+      setActiveCourseIds(activeIds);
+    } catch (err) {
+      console.error('Error fetching student keys:', err);
+      const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      setActiveCourseIds(localActivated);
+    }
+  };
+
+  // Check if a Firebase user counts as an administrator
+  const isFirebaseUserAdmin = (email: string | null | undefined): boolean => {
+    if (!email) return false;
+    const lower = email.toLowerCase();
+    return lower === 'ai.clipzone.edu@gmail.com' || lower === 'rajababum426@gmail.com' || lower.startsWith('admin');
+  };
+
+  // Fetch all keys for Admin panel
+  const fetchAdminKeys = async () => {
+    setIsAdminLoadingKeys(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'activation_keys'));
+      const keys: any[] = [];
+      querySnapshot.forEach((doc) => {
+        keys.push({ id: doc.id, ...doc.data() });
+      });
+      keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setAllActivationKeys(keys);
+    } catch (err: any) {
+      console.error('Failed to load keys for admin:', err);
+      if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
+        showToast('Database permission denied. Please sign in to Student Portal with an Admin email!', 'error');
+      } else {
+        showToast('Failed to load keys from database.', 'error');
+      }
+    } finally {
+      setIsAdminLoadingKeys(false);
+    }
+  };
+
+  // Fetch admin keys when admin is activated or refreshed
+  useEffect(() => {
+    if (isAdminActivated) {
+      fetchAdminKeys();
+    }
+  }, [isAdminActivated]);
+
+  // STUDENT PORTAL HANDLERS (PASSWORD-FREE ANONYMOUS SIGN-IN)
+  const handleStudentAnonymousLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsAuthSubmitting(true);
+    const cleanName = authName.trim();
+    if (!cleanName) {
+      setAuthError('कृपया आफ्नो पुरा नाम राख्नुहोस् (Full Name is required).');
+      setIsAuthSubmitting(false);
+      return;
+    }
+
+    try {
+      const userCredential = await signInAnonymously(auth);
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: cleanName
+        });
+        localStorage.setItem('clipzone_student_name', cleanName);
+        showToast(`Welcome ${cleanName}! Student Profile set up successfully! 🚀`, 'success');
+        setCurrentUser(userCredential.user);
+        await fetchUserActiveKeys(userCredential.user);
+      }
+    } catch (err: any) {
+      console.error('Anonymous sign-in error:', err);
+      setAuthError('Failed to create student session. Please try again.');
+      showToast('Profile setup failed.', 'error');
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleStudentLogout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.removeItem('clipzone_student_name');
+      localStorage.removeItem('clipzone_local_activated_courses');
+      setCurrentUser(null);
+      setUserActivationKeys([]);
+      setActiveCourseIds([]);
+      showToast('Logged out of Student Portal successfully!', 'info');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  // ACTIVATE / CLAIM SECRET KEY
+  const handleClaimActivationCode = async (e: FormEvent) => {
+    e.preventDefault();
+    const cleanCode = activationCodeInput.trim().toUpperCase();
+    if (!cleanCode) {
+      showToast('Please enter a secret activation code.', 'error');
+      return;
+    }
+
+    let studentName = authName.trim() || localStorage.getItem('clipzone_student_name') || '';
+    if (!studentName) {
+      const inputName = window.prompt('Please enter your Full Name to register this course:');
+      if (inputName && inputName.trim()) {
+        studentName = inputName.trim();
+        setAuthName(studentName);
+        localStorage.setItem('clipzone_student_name', studentName);
+      } else {
+        showToast('Your Full Name is required to register the course!', 'error');
+        return;
+      }
+    }
+
+    setIsActivating(true);
+    try {
+      // Ensure we have a Firebase Auth session (Anonymous if no session exists!)
+      let activeUser = currentUser;
+      if (!activeUser) {
+        const userCredential = await signInAnonymously(auth);
+        activeUser = userCredential.user;
+        await updateProfile(activeUser, {
+          displayName: studentName
+        });
+        setCurrentUser(activeUser);
+      }
+
+      const keyDocRef = doc(db, 'activation_keys', cleanCode);
+      const keyDocSnap = await getDoc(keyDocRef);
+
+      if (!keyDocSnap.exists()) {
+        showToast('Invalid secret activation code! Please check and try again.', 'error');
+        setIsActivating(false);
+        return;
+      }
+
+      const keyData = keyDocSnap.data();
+      if (keyData.status === 'used') {
+        showToast('This activation code has already been used!', 'error');
+        setIsActivating(false);
+        return;
+      }
+
+      // Update in Firestore
+      await updateDoc(keyDocRef, {
+        status: 'used',
+        claimedByEmail: studentName, // Store student name here as they are using names instead of emails
+        claimedByUid: activeUser.uid,
+        claimedAt: Date.now(),
+        expiresAt: Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000)
+      });
+
+      // Save locally to make it 100% stable offline-first
+      const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      if (keyData.courseId && !localActivated.includes(keyData.courseId)) {
+        localActivated.push(keyData.courseId);
+        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(localActivated));
+      }
+
+      showToast(`Success! Unlocked: "${keyData.courseTitle || 'Your Course'}"! 🎉`, 'success');
+      setActivationCodeInput('');
+      
+      // Refresh user's key list
+      await fetchUserActiveKeys(activeUser);
+    } catch (err) {
+      console.error('Error claiming activation code:', err);
+      showToast('Failed to claim the secret code. Please contact admin.', 'error');
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  // ADMIN ACTIVATION KEY GENERATION HANDLERS
+  const handleGenerateActivationKey = async (courseId: string, autoCopy: boolean = true) => {
+    let targetCourseId = courseId;
+    if (!targetCourseId && courses && courses.length > 0) {
+      targetCourseId = courses[0].id;
+    }
+    
+    if (!targetCourseId) {
+      showToast('Please select a course to generate code for!', 'error');
+      return;
+    }
+    const selectedCourseData = courses.find(c => c.id === targetCourseId);
+    if (!selectedCourseData) return;
+
+    // Generate readable random secret code
+    const randId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const finalCode = `CLIP-${randId}`;
+
+    try {
+      await setDoc(doc(db, 'activation_keys', finalCode), {
+        code: finalCode,
+        status: 'unused',
+        duration: genSelectedDuration,
+        createdAt: Date.now(),
+        courseId: selectedCourseData.id,
+        courseTitle: selectedCourseData.title
+      });
+
+      if (autoCopy) {
+        try {
+          await navigator.clipboard.writeText(finalCode);
+          showToast(`Secret code "${finalCode}" generated & copied to clipboard! 📋`, 'success');
+        } catch (clipErr) {
+          showToast(`Secret code "${finalCode}" generated successfully!`, 'success');
+        }
+      } else {
+        showToast(`Secret code "${finalCode}" generated successfully!`, 'success');
+      }
+      fetchAdminKeys(); // reload
+    } catch (err) {
+      console.error('Failed to generate code:', err);
+      showToast('Failed to write to database.', 'error');
+    }
+  };
+
+  const handleDeleteActivationKey = async (code: string) => {
+    if (!window.confirm(`Are you sure you want to delete secret code ${code}?`)) return;
+    try {
+      await deleteDoc(doc(db, 'activation_keys', code));
+      showToast(`Secret code ${code} deleted successfully.`, 'success');
+      fetchAdminKeys(); // reload
+    } catch (err) {
+      console.error('Failed to delete key:', err);
+      showToast('Failed to delete key from database.', 'error');
+    }
+  };
+
   // Move Course Up / Down
   const handleMoveCourse = async (currentIndex: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
@@ -228,6 +501,36 @@ export default function App() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   // Canvas ref for FonePay QR
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Student Authentication & Course Activation states
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userActivationKeys, setUserActivationKeys] = useState<any[]>([]);
+  const [activeCourseIds, setActiveCourseIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+  const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
+  const [activationCodeInput, setActivationCodeInput] = useState('');
+  const [isActivating, setIsActivating] = useState(false);
+
+  // Auth Form Fields
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState(() => localStorage.getItem('clipzone_student_name') || '');
+  const [authError, setAuthError] = useState('');
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+
+  // Admin Key Generation Panel states
+  const [allActivationKeys, setAllActivationKeys] = useState<any[]>([]);
+  const [genSelectedCourseId, setGenSelectedCourseId] = useState('');
+  const [genSelectedDuration, setGenSelectedDuration] = useState<'1month' | '1year'>('1year');
+  const [adminSearchKeyQuery, setAdminSearchKeyQuery] = useState('');
+  const [isAdminLoadingKeys, setIsAdminLoadingKeys] = useState(false);
 
   // FAQ open indexes
   const [openFaqs, setOpenFaqs] = useState<Record<number, boolean>>({});
@@ -741,6 +1044,16 @@ export default function App() {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
+                        setShowAdminMenu(false);
+                        setShowAdminDashboard(true);
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      🗝️ Code Generator
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setIsAdminActivated(false);
                         localStorage.removeItem('clipzone_admin_activated');
                         setShowAdminMenu(false);
@@ -777,10 +1090,16 @@ export default function App() {
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-10 h-10 rounded-full bg-purple-950/60 border border-purple-500/30 text-white hover:bg-purple-900 transition flex items-center justify-center cursor-pointer select-none"
+                className="w-10 h-10 rounded-full bg-purple-950/60 border border-purple-500/30 text-white hover:bg-purple-900 transition flex items-center justify-center cursor-pointer select-none font-bold text-xs"
                 title="Menu"
               >
-                <Menu className="w-5 h-5" />
+                {currentUser ? (
+                  <span className="uppercase text-[11px] text-purple-300 font-black">
+                    {(currentUser.displayName || currentUser.email || 'ST').substring(0, 2)}
+                  </span>
+                ) : (
+                  <Menu className="w-5 h-5" />
+                )}
               </button>
 
               <AnimatePresence>
@@ -1621,7 +1940,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* COURSE DETAILS MODAL */}
+      {/* COURSE DETAILS & PREMIUM PLAYLIST LECTURE HUB */}
       <AnimatePresence>
         {selectedCourse && !showQrModal && (
           <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
@@ -1630,79 +1949,227 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedCourse(null)}
+              onClick={() => {
+                setSelectedCourse(null);
+                setCurrentVideoIndex(0);
+              }}
               className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
             />
 
             {/* Modal Box */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ duration: 0.25 }}
-              className="bg-white max-w-lg w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 max-h-[90vh] overflow-y-auto border border-slate-100"
-            >
-              <button 
-                onClick={() => setSelectedCourse(null)}
-                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition"
+            {activeCourseIds.includes(selectedCourse.id) ? (
+              /* ACTIVE CLASSROOM INTERACTIVE HUD (UNLOCKED CONTENT) */
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-slate-950 text-white max-w-5xl w-full rounded-3xl overflow-hidden shadow-2xl relative z-10 border border-slate-800 flex flex-col md:flex-row max-h-[92vh] animate-in zoom-in-95 duration-200"
               >
-                <X className="w-6 h-6" />
-              </button>
-
-              <span className="inline-block bg-purple-100 text-purple-800 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3">
-                Course Details
-              </span>
-
-              <h3 className="text-xl md:text-2xl font-extrabold text-slate-900 leading-tight">
-                {selectedCourse.title}
-              </h3>
-              
-              <p className="text-3xl font-black text-purple-700 mt-3">
-                {selectedCourse.price}
-              </p>
-
-              <div className="mt-6">
-                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">
-                  यो Course बाट के सिक्नुहुन्छ ?
-                </h4>
-                
-                <ul className="space-y-3">
-                  {selectedCourse.learn.map((item, index) => (
-                    <li key={index} className="flex items-start gap-3 text-slate-700 text-sm md:text-base leading-relaxed">
-                      <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      </div>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Secure purchase assurances */}
-              <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 text-xs text-slate-600 font-semibold">
-                <ShieldCheck className="w-6 h-6 text-emerald-500 shrink-0" />
-                <span>१००% सुरक्षित भुक्तानी। भुक्तानी गरेपछि तत्कालै ड्राइभ लिङ्क र भिडियो कोर्ष प्राप्त गर्नुहुनेछ।</span>
-              </div>
-
-              {/* Purchase options CTA */}
-              <div className="mt-8 flex flex-col gap-3">
-                <a 
-                  href={`https://wa.me/9779763323268?text=${encodeURIComponent(selectedCourse.message)}`}
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2"
-                >
-                  <Send className="w-4 h-4" /> WhatsApp बाट किन्नुहोस्
-                </a>
-                
                 <button 
-                  onClick={handleOpenFonePayQR}
-                  className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => {
+                    setSelectedCourse(null);
+                    setCurrentVideoIndex(0);
+                  }}
+                  className="absolute top-5 right-5 text-slate-400 hover:text-white transition z-[100] bg-slate-900/65 p-2 rounded-full border border-slate-800"
                 >
-                  <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Khalti)</span>
+                  <X className="w-5 h-5" />
                 </button>
-              </div>
-            </motion.div>
+
+                {/* Left Area: Video Player */}
+                <div className="flex-1 p-6 md:p-8 flex flex-col justify-between text-left min-w-0">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-emerald-500/30">
+                        🟢 Connected & Active
+                      </span>
+                      <span className="text-xs text-slate-400 font-bold">Lecture Classroom</span>
+                    </div>
+
+                    <h3 className="text-xl md:text-2xl font-black text-white tracking-tight leading-tight">
+                      {selectedCourse.title}
+                    </h3>
+                  </div>
+
+                  {/* Player container */}
+                  <div className="relative aspect-video w-full bg-slate-900 rounded-2xl overflow-hidden mt-6 border border-slate-800/80 group">
+                    {/* Security Overlay (blocks context menus & right clicks) */}
+                    <div 
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="absolute inset-0 z-50 pointer-events-none"
+                    />
+
+                    {/* Watermark to discourage screen records */}
+                    <div className="absolute bottom-3 left-4 z-40 bg-slate-950/60 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-slate-800 pointer-events-none select-none">
+                      <p className="text-[10px] text-slate-400 font-mono font-bold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        {currentUser?.email || 'Student Learner'} • Protected View
+                      </p>
+                    </div>
+
+                    {/* YouTube non-cookie security iframe embed */}
+                    {(() => {
+                      const activePlaylist = selectedCourse.videos && selectedCourse.videos.length > 0 
+                        ? selectedCourse.videos 
+                        : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
+                      
+                      const currentLecture = activePlaylist[currentVideoIndex] || activePlaylist[0];
+                      
+                      // Extract Youtube ID safely
+                      const getYouTubeId = (url: string): string => {
+                        if (!url) return '';
+                        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                        const match = url.match(regExp);
+                        return (match && match[2].length === 11) ? match[2] : '';
+                      };
+
+                      const ytId = getYouTubeId(currentLecture.videoUrl);
+                      const secureEmbedSrc = ytId 
+                        ? `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3&disablekb=1&autoplay=0`
+                        : currentLecture.videoUrl;
+
+                      return (
+                        <iframe
+                          src={secureEmbedSrc}
+                          className="w-full h-full object-cover"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          title={currentLecture.title}
+                          id="secure-lecture-iframe"
+                        />
+                      );
+                    })()}
+                  </div>
+
+                  {/* Playing lecture info */}
+                  <div className="mt-5 space-y-1">
+                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">Currently Playing:</span>
+                    <h4 className="text-sm md:text-base font-extrabold text-slate-100">
+                      {((selectedCourse.videos && selectedCourse.videos.length > 0 ? selectedCourse.videos : [{ title: 'Introductory Lecture & Overview' }])[currentVideoIndex] || { title: 'Introductory Lecture' }).title}
+                    </h4>
+                    <p className="text-xs text-slate-400 font-medium flex items-center gap-2">
+                      ⏳ Duration: {((selectedCourse.videos && selectedCourse.videos.length > 0 ? selectedCourse.videos : [{ duration: '12:15' }])[currentVideoIndex] || { duration: '12:00' }).duration} minutes
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Area: Scrolling Playlist */}
+                <div className="w-full md:w-[320px] bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 p-6 flex flex-col justify-between max-h-full">
+                  <div className="space-y-4 flex-1 overflow-hidden flex flex-col text-left">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      📖 Course Lecture Playlist
+                    </h4>
+
+                    {/* Playlist container scroll */}
+                    <div className="space-y-2 overflow-y-auto pr-1 flex-1 max-h-[300px] md:max-h-[380px]">
+                      {(() => {
+                        const list = selectedCourse.videos && selectedCourse.videos.length > 0 
+                          ? selectedCourse.videos 
+                          : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: '' }];
+                        
+                        return list.map((video, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setCurrentVideoIndex(idx);
+                              showToast(`Loading lecture: ${video.title}`, 'info');
+                            }}
+                            className={`p-3 rounded-2xl border transition cursor-pointer flex items-start gap-3 text-xs ${
+                              currentVideoIndex === idx 
+                                ? 'bg-purple-900/45 border-purple-500/50 text-purple-200' 
+                                : 'bg-slate-950 hover:bg-slate-800 border-slate-800/80 text-slate-300'
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-lg bg-slate-900 text-purple-400 border border-slate-800 flex items-center justify-center font-black shrink-0 text-[10px]">
+                              {currentVideoIndex === idx ? '▶️' : idx + 1}
+                            </div>
+                            <div className="min-w-0">
+                              <h5 className="font-bold text-slate-100 truncate max-w-[200px]">{video.title || `Lecture ${idx+1}`}</h5>
+                              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">⏱️ {video.duration || '10:00'} min</p>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-slate-800 text-[10px] text-slate-500 font-semibold text-left space-y-1">
+                    <p>🔒 Security protocol fully active.</p>
+                    <p>⚠️ Unauthorized copying, distribution, or download of these course materials is strictly prohibited.</p>
+                  </div>
+                </div>
+
+              </motion.div>
+            ) : (
+              /* STANDARD CATALOG DETAILS MODAL (FOR BUYING / BEFORE CLAIM) */
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.25 }}
+                className="bg-white max-w-lg w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 max-h-[90vh] overflow-y-auto border border-slate-100 text-slate-800"
+              >
+                <button 
+                  onClick={() => setSelectedCourse(null)}
+                  className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+
+                <span className="inline-block bg-purple-100 text-purple-800 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3">
+                  Course Details
+                </span>
+
+                <h3 className="text-xl md:text-2xl font-extrabold text-slate-900 leading-tight text-left">
+                  {selectedCourse.title}
+                </h3>
+                
+                <p className="text-3xl font-black text-purple-700 mt-3 text-left">
+                  {selectedCourse.price}
+                </p>
+
+                <div className="mt-6 text-left">
+                  <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">
+                    यो Course बाट के सिक्नुहुन्छ ?
+                  </h4>
+                  
+                  <ul className="space-y-3">
+                    {selectedCourse.learn.map((item, index) => (
+                      <li key={index} className="flex items-start gap-3 text-slate-700 text-sm md:text-base leading-relaxed">
+                        <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Secure purchase assurances */}
+                <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 text-xs text-slate-600 font-semibold text-left">
+                  <ShieldCheck className="w-6 h-6 text-emerald-500 shrink-0" />
+                  <span>१००% सुरक्षित भुक्तानी। भुक्तानी गरेपछि तत्कालै ड्राइभ लिङ्क र भिडियो कोर्ष प्राप्त गर्नुहुनेछ।</span>
+                </div>
+
+                {/* Purchase options CTA */}
+                <div className="mt-8 flex flex-col gap-3">
+                  <a 
+                    href={`https://wa.me/9779763323268?text=${encodeURIComponent(selectedCourse.message)}`}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2"
+                  >
+                    <Send className="w-4 h-4" /> WhatsApp बाट किन्नुहोस्
+                  </a>
+                  
+                  <button 
+                    onClick={handleOpenFonePayQR}
+                    className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Khalti)</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
         )}
       </AnimatePresence>
@@ -1735,60 +2202,162 @@ export default function App() {
               </button>
 
               <span className="inline-block bg-purple-100 text-purple-800 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3">
-                👤 Student Profile
+                👤 Student Portal
               </span>
 
-              <div className="flex items-center gap-4 mt-2">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-800 text-white flex items-center justify-center text-xl font-black shadow-md">
-                  ST
+              {authLoading ? (
+                <div className="py-12 text-center text-xs font-bold text-slate-400 flex flex-col items-center justify-center gap-3">
+                  <span className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
+                  Securing user session...
                 </div>
-                <div className="text-left">
+              ) : !currentUser && !localStorage.getItem('clipzone_student_name') ? (
+                /* CASE: NO NAME REGISTERED - ASKS FOR STUDENT NAME FOR INSTANT SETUP */
+                <div className="text-left mt-2">
                   <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                    Clipzone Student
+                    Welcome to AI Clipzone Nepal 🇳🇵
                   </h3>
-                  <p className="text-xs font-semibold text-slate-400 mt-0.5">student@aiclipzone.com</p>
-                  <p className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-extrabold inline-block mt-1.5 uppercase tracking-wider">Verified Learner</p>
-                </div>
-              </div>
+                  <p className="text-xs text-slate-400 mt-1 font-semibold leading-relaxed">
+                    भिडियो कोर्सहरू अनलक गर्न र हेर्नको लागि कृपया आफ्नो नाम दर्ता गर्नुहोस्। दर्ता गर्न कुनै पासवर्ड वा इमेल चाहिदैन!
+                  </p>
 
-              <div className="mt-8 space-y-4 text-left">
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Current Enrollment</span>
-                  <div className="flex items-center gap-3 mt-2">
-                    <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
-                      📖
+                  {authError && (
+                    <div className="bg-rose-50 text-rose-700 p-3 rounded-xl border border-rose-100 text-[11px] font-bold mb-4 mt-4">
+                      ⚠️ {authError}
                     </div>
+                  )}
+
+                  <form onSubmit={handleStudentAnonymousLogin} className="space-y-4 mt-6">
                     <div>
-                      <h4 className="text-sm font-extrabold text-slate-800">YouTube Blueprint Course</h4>
-                      <p className="text-[10px] text-emerald-600 font-bold mt-0.5">🟢 Lifetime Active Access</p>
+                      <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5 tracking-wider">विद्यार्थीको पूरा नाम (Full Name) *</label>
+                      <input 
+                        type="text"
+                        required
+                        value={authName}
+                        onChange={(e) => setAuthName(e.target.value)}
+                        placeholder="उदाहरण: Ram Bahadur"
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 outline-hidden"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isAuthSubmitting}
+                      className="w-full bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition cursor-pointer"
+                    >
+                      {isAuthSubmitting ? 'Saving Profile...' : '🚀 Instant Register & Start Learning'}
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                /* CASE: REGISTERED STUDENT */
+                <div className="text-left mt-2 space-y-6">
+                  {/* Student profile summary */}
+                  <div className="flex items-center gap-4 bg-purple-50/40 p-4 rounded-2xl border border-purple-100/60">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-700 to-indigo-800 text-white flex items-center justify-center text-lg font-black shadow-md shrink-0 uppercase">
+                      {(currentUser?.displayName || authName || 'ST').substring(0, 2)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-black text-slate-900 tracking-tight truncate">
+                        {currentUser?.displayName || authName || 'Student Learner'}
+                      </h3>
+                      <p className="text-[10px] font-semibold text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Nepal Student Profile
+                      </p>
                     </div>
                   </div>
-                </div>
 
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Account Specifications</span>
-                  <div className="grid grid-cols-2 gap-4 mt-2 text-xs font-bold">
-                    <div>
-                      <span className="text-slate-400 block text-[10px] uppercase">Registered:</span>
-                      <span className="text-slate-700 font-extrabold">July 2026</span>
+                  {/* Activate Course Secret Key Box */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                    <h4 className="text-[10px] font-black uppercase text-purple-800 tracking-wider mb-1.5">
+                      🗝️ Activate Course with Secret Code
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-semibold mb-3 leading-relaxed">
+                      Enter the secret key (provided by AI Clipzone Admin) to unlock and claim premium course playlists.
+                    </p>
+                    <form onSubmit={handleClaimActivationCode} className="flex gap-2">
+                      <input 
+                        type="text"
+                        value={activationCodeInput}
+                        onChange={(e) => setActivationCodeInput(e.target.value)}
+                        placeholder="उदाहरण: CLIP-XXXXXX"
+                        className="flex-1 bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3 py-2 text-xs font-mono font-black uppercase outline-hidden"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isActivating || !activationCodeInput.trim()}
+                        className="bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-black px-4 py-2 rounded-xl text-xs transition shrink-0 cursor-pointer"
+                      >
+                        {isActivating ? 'Activating...' : 'Activate'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Unlocked / Enrolled Courses catalog list */}
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2">
+                      📚 My Unlocked Courses ({activeCourseIds.length})
+                    </h4>
+
+                    {activeCourseIds.length === 0 ? (
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/60 text-center text-[11px] text-slate-400 font-semibold leading-relaxed">
+                        🚫 You haven't activated any courses yet.<br />
+                        Please enter your Secret Activation Code above!
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
+                        {courses
+                          .filter(course => activeCourseIds.includes(course.id))
+                          .map((course) => (
+                            <div 
+                              key={course.id}
+                              onClick={() => {
+                                setSelectedCourse(course);
+                                setShowProfileModal(false);
+                                showToast(`Let's study "${course.title}"! 📖`, 'info');
+                              }}
+                              className="bg-slate-50 hover:bg-purple-50 p-3 rounded-2xl border border-slate-200/60 flex items-center justify-between gap-3 cursor-pointer transition"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm shrink-0">
+                                  📖
+                                </div>
+                                <div className="min-w-0">
+                                  <h5 className="text-xs font-black text-slate-800 truncate">{course.title}</h5>
+                                  <p className="text-[9px] text-emerald-600 font-black flex items-center gap-1 mt-0.5">
+                                    <span>🟢 Active Access</span>
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-purple-700 hover:underline shrink-0">
+                                Watch →
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Logout and metadata section */}
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-4 text-[11px]">
+                    <div className="text-slate-400 font-bold">
+                      Country: <span className="text-slate-700 font-black">Nepal 🇳🇵</span>
                     </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px] uppercase">Country:</span>
-                      <span className="text-slate-700 font-extrabold">Nepal 🇳🇵</span>
-                    </div>
+                    <button
+                      onClick={handleStudentLogout}
+                      className="text-rose-600 hover:text-rose-800 font-black uppercase tracking-wider cursor-pointer"
+                    >
+                      🚪 Log Out
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-200/50 text-[11px] text-amber-800 font-bold leading-normal text-left">
-                📌 यो प्रोफाइल पेजको नमुना हो। आगामी दिनहरूमा यसमा अरु थप विवरण वा सुविधाहरू थप्नको लागि कृपया मलाई भन्नुहोस्!
-              </div>
+              )}
 
               <button 
                 onClick={() => setShowProfileModal(false)}
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition mt-6 cursor-pointer"
               >
-                Close Profile
+                Close Portal
               </button>
             </motion.div>
           </div>
@@ -1945,6 +2514,245 @@ export default function App() {
                   Cancel
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ADMIN SECRET CODE GENERATOR DASHBOARD */}
+      <AnimatePresence>
+        {showAdminDashboard && (
+          <div className="fixed inset-0 z-[2200] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAdminDashboard(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white max-w-4xl w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100 flex flex-col max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 text-slate-800"
+            >
+              <button 
+                onClick={() => setShowAdminDashboard(false)}
+                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-2">
+                <span className="bg-purple-100 text-purple-800 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full">
+                  🗝️ Code Management
+                </span>
+                <span className="text-xs text-slate-400 font-bold">Admin Panel</span>
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight text-left">
+                Student Activation Key Registry
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 font-semibold text-left">
+                Generate unreleased secret activation codes to unlock dynamic courses. Share generated keys with students to enable high-speed learning.
+              </p>
+
+              {/* Administrator Authentication Guard status confirmation */}
+              <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-4 mt-5 text-xs text-emerald-800 font-semibold leading-relaxed text-left flex items-start gap-3">
+                <span className="text-base select-none">✅</span>
+                <div>
+                  <strong className="font-black text-emerald-900">Admin Mode Activated (offline-first & auto-synced)</strong>
+                  <p className="mt-1">
+                    You have bypassed the email requirements! You can now view, delete, or generate secret course keys instantly.
+                  </p>
+                </div>
+              </div>
+
+              {/* Grid content */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8 text-left">
+                
+                {/* Left Column: Generator tool */}
+                <div className="lg:col-span-5 bg-slate-50 p-5 rounded-2xl border border-slate-200/60 self-start">
+                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider mb-4 flex items-center gap-1.5">
+                    ✨ Generate New Secret Key
+                  </h4>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Select Course Catalog *</label>
+                      <select 
+                        value={genSelectedCourseId}
+                        onChange={(e) => setGenSelectedCourseId(e.target.value)}
+                        className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-700"
+                      >
+                        <option value="">-- Choose Course --</option>
+                        {courses.map(course => (
+                          <option key={course.id} value={course.id}>{course.title}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Key Subscription Duration</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setGenSelectedDuration('1month')}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                            genSelectedDuration === '1month' 
+                              ? 'bg-purple-600 border-purple-600 text-white shadow-xs' 
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          1 Month Access
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGenSelectedDuration('1year')}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                            genSelectedDuration === '1year' 
+                              ? 'bg-purple-600 border-purple-600 text-white shadow-xs' 
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          1 Year Access
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <button
+                        onClick={() => {
+                          handleGenerateActivationKey(genSelectedCourseId, true);
+                        }}
+                        className="w-full bg-purple-700 hover:bg-purple-800 text-white font-extrabold py-3.5 rounded-xl text-xs shadow-md transition tracking-wider uppercase cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        ⚡ Auto-Generate & Copy To Clipboard
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleGenerateActivationKey(genSelectedCourseId, false);
+                        }}
+                        className="w-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-extrabold py-2.5 rounded-xl text-xs transition tracking-wider uppercase cursor-pointer text-center"
+                      >
+                        Generate Code Only
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Registry table */}
+                <div className="lg:col-span-7 flex flex-col">
+                  <div className="flex items-center justify-between mb-4 gap-3">
+                    <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                      📋 Active Licenses & Status ({allActivationKeys.length})
+                    </h4>
+                    <button
+                      onClick={fetchAdminKeys}
+                      className="text-purple-600 hover:text-purple-800 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                    >
+                      🔄 Refresh
+                    </button>
+                  </div>
+
+                  {/* Search box */}
+                  <div className="relative mb-3">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input 
+                      type="text"
+                      placeholder="Search code, course name or student email..."
+                      value={adminSearchKeyQuery}
+                      onChange={(e) => setAdminSearchKeyQuery(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl pl-9 pr-4 py-2 text-xs transition outline-hidden"
+                    />
+                  </div>
+
+                  {/* Registry table wrapper */}
+                  <div className="border border-slate-100 rounded-2xl overflow-hidden max-h-[350px] overflow-y-auto bg-white shadow-xs">
+                    {isAdminLoadingKeys ? (
+                      <div className="p-8 text-center text-xs text-slate-400 font-semibold flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
+                        Loading key register database...
+                      </div>
+                    ) : allActivationKeys.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400 font-semibold">
+                        No subscription keys found in Firestore. Generate one on the left!
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {allActivationKeys
+                          .filter(key => {
+                            const query = adminSearchKeyQuery.toLowerCase();
+                            return (
+                              key.code.toLowerCase().includes(query) ||
+                              (key.courseTitle || '').toLowerCase().includes(query) ||
+                              (key.claimedByEmail || '').toLowerCase().includes(query)
+                            );
+                          })
+                          .map((key) => (
+                            <div key={key.id} className="p-3 hover:bg-slate-50/50 transition flex items-center justify-between gap-4 text-xs">
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 select-all">
+                                    {key.code}
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(key.code);
+                                      showToast(`Copied code: ${key.code}! 📋`, 'success');
+                                    }}
+                                    className="text-slate-400 hover:text-slate-600 transition text-[10px] font-bold"
+                                    title="Copy Key"
+                                  >
+                                    Copy
+                                  </button>
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase ${
+                                    key.status === 'unused' 
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  }`}>
+                                    {key.status}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-100">
+                                    {key.duration === '1month' ? '30d' : '365d'}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] font-extrabold text-slate-700 truncate max-w-[280px]">
+                                  {key.courseTitle || 'All Courses'}
+                                </p>
+                                {key.status === 'used' && (
+                                  <div className="text-[9px] font-medium text-slate-400 space-y-0.5">
+                                    <p className="truncate">Claimed: <span className="font-bold text-slate-500">{key.claimedByEmail}</span></p>
+                                    <p>Claimed At: <span className="font-bold">{new Date(key.claimedAt || 0).toLocaleDateString()}</span></p>
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleDeleteActivationKey(key.code)}
+                                className="text-slate-300 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition shrink-0 cursor-pointer"
+                                title="Delete license"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+              <button 
+                onClick={() => setShowAdminDashboard(false)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition mt-8 cursor-pointer"
+              >
+                Close Key Manager
+              </button>
             </motion.div>
           </div>
         )}

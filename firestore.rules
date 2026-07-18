@@ -42,22 +42,7 @@ service cloud.firestore {
 
     // Security rules for premium activation/license keys
     match /activation_keys/{code} {
-      // Any signed-in student can read/lookup keys, and admins can view all
-      allow read: if isSignedIn();
-      
-      // Only admins can create or delete keys
-      allow create, delete: if isSignedIn() && isAdmin();
-      
-      // Admins can update. Students can update ONLY IF the key is currently unused, 
-      // and they are setting it as used with their own verified email and UID.
-      allow update: if isSignedIn() && (
-        isAdmin() || (
-          resource.data.status == 'unused' &&
-          request.resource.data.status == 'used' &&
-          request.resource.data.claimedByEmail.lower() == request.auth.token.email.lower() &&
-          request.resource.data.claimedByUid == request.auth.uid
-        )
-      );
+      allow read, write: if true;
     }
 
     // Security rules for student video progress

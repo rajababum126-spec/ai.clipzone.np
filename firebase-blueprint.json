@@ -73,6 +73,14 @@
         "expiresAt": {
           "type": "number",
           "description": "Timestamp when the license expires"
+        },
+        "courseId": {
+          "type": "string",
+          "description": "The course ID associated with this activation key"
+        },
+        "courseTitle": {
+          "type": "string",
+          "description": "The title of the course associated with this activation key"
         }
       },
       "required": ["code", "status", "duration", "createdAt"]

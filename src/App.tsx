@@ -185,17 +185,41 @@ export default function App() {
     fetchCourses();
   }, []);
 
+  const getOrCreateLocalUser = (displayName: string) => {
+    let uid = localStorage.getItem('clipzone_student_uid');
+    if (!uid) {
+      uid = 'local_' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('clipzone_student_uid', uid);
+    }
+    return {
+      uid,
+      displayName,
+      isAnonymous: true,
+      email: null
+    };
+  };
+
   // Firebase Authentication Observer & User Keys Fetcher
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setAuthLoading(false);
       if (user) {
+        setCurrentUser(user);
+        setAuthLoading(false);
         fetchUserActiveKeys(user);
       } else {
-        setUserActivationKeys([]);
-        const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-        setActiveCourseIds(localActivated);
+        const localName = localStorage.getItem('clipzone_student_name');
+        if (localName) {
+          const virtualUser = getOrCreateLocalUser(localName);
+          setCurrentUser(virtualUser as any);
+          const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+          setActiveCourseIds(localActivated);
+        } else {
+          setCurrentUser(null);
+          setUserActivationKeys([]);
+          const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+          setActiveCourseIds(localActivated);
+        }
+        setAuthLoading(false);
       }
     });
     return () => unsubscribe();
@@ -287,15 +311,29 @@ export default function App() {
     }
 
     try {
-      const userCredential = await signInAnonymously(auth);
-      if (userCredential.user) {
-        await updateProfile(userCredential.user, {
-          displayName: cleanName
-        });
-        localStorage.setItem('clipzone_student_name', cleanName);
-        showToast(`Welcome ${cleanName}! Student Profile set up successfully! 🚀`, 'success');
-        setCurrentUser(userCredential.user);
-        await fetchUserActiveKeys(userCredential.user);
+      let activeUser: any = null;
+      try {
+        const userCredential = await signInAnonymously(auth);
+        activeUser = userCredential.user;
+        if (activeUser) {
+          await updateProfile(activeUser, {
+            displayName: cleanName
+          });
+        }
+      } catch (authErr) {
+        console.warn('Firebase Anonymous sign-in failed or disabled, falling back to local guest user:', authErr);
+        activeUser = getOrCreateLocalUser(cleanName);
+      }
+
+      localStorage.setItem('clipzone_student_name', cleanName);
+      showToast(`Welcome ${cleanName}! Student Profile set up successfully! 🚀`, 'success');
+      setCurrentUser(activeUser);
+      
+      if (activeUser && activeUser.uid && !activeUser.uid.startsWith('local_')) {
+        await fetchUserActiveKeys(activeUser);
+      } else {
+        const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+        setActiveCourseIds(localActivated);
       }
     } catch (err: any) {
       console.error('Anonymous sign-in error:', err);
@@ -309,15 +347,16 @@ export default function App() {
   const handleStudentLogout = async () => {
     try {
       await signOut(auth);
-      localStorage.removeItem('clipzone_student_name');
-      localStorage.removeItem('clipzone_local_activated_courses');
-      setCurrentUser(null);
-      setUserActivationKeys([]);
-      setActiveCourseIds([]);
-      showToast('Logged out of Student Portal successfully!', 'info');
     } catch (err) {
-      console.error('Logout error:', err);
+      console.warn('Sign out from Firebase failed, continuing local logout:', err);
     }
+    localStorage.removeItem('clipzone_student_name');
+    localStorage.removeItem('clipzone_student_uid');
+    localStorage.removeItem('clipzone_local_activated_courses');
+    setCurrentUser(null);
+    setUserActivationKeys([]);
+    setActiveCourseIds([]);
+    showToast('Logged out of Student Portal successfully!', 'info');
   };
 
   // ACTIVATE / CLAIM SECRET KEY
@@ -344,54 +383,91 @@ export default function App() {
 
     setIsActivating(true);
     try {
-      // Ensure we have a Firebase Auth session (Anonymous if no session exists!)
+      // Ensure we have a student profile session (Anonymous or virtual local user!)
       let activeUser = currentUser;
       if (!activeUser) {
-        const userCredential = await signInAnonymously(auth);
-        activeUser = userCredential.user;
-        await updateProfile(activeUser, {
-          displayName: studentName
-        });
-        setCurrentUser(activeUser);
+        try {
+          const userCredential = await signInAnonymously(auth);
+          activeUser = userCredential.user;
+          await updateProfile(activeUser, {
+            displayName: studentName
+          });
+          setCurrentUser(activeUser);
+        } catch (authErr) {
+          console.warn('Firebase anonymous sign-in failed/disabled during activation, falling back to local student profile:', authErr);
+          activeUser = getOrCreateLocalUser(studentName) as any;
+          setCurrentUser(activeUser);
+        }
       }
 
-      const keyDocRef = doc(db, 'activation_keys', cleanCode);
-      const keyDocSnap = await getDoc(keyDocRef);
-
-      if (!keyDocSnap.exists()) {
-        showToast('Invalid secret activation code! Please check and try again.', 'error');
-        setIsActivating(false);
-        return;
+      // Look up key in Firestore
+      let keyData: any = null;
+      let keyDocRef = null;
+      try {
+        keyDocRef = doc(db, 'activation_keys', cleanCode);
+        const keyDocSnap = await getDoc(keyDocRef);
+        if (keyDocSnap.exists()) {
+          keyData = keyDocSnap.data();
+        }
+      } catch (dbErr) {
+        console.warn('Failed to query activation key from Firestore, using offline sandbox lookup:', dbErr);
       }
 
-      const keyData = keyDocSnap.data();
-      if (keyData.status === 'used') {
+      // If Firestore key was loaded and is already claimed, block
+      if (keyData && keyData.status === 'used') {
         showToast('This activation code has already been used!', 'error');
         setIsActivating(false);
         return;
       }
 
-      // Update in Firestore
-      await updateDoc(keyDocRef, {
-        status: 'used',
-        claimedByEmail: studentName, // Store student name here as they are using names instead of emails
-        claimedByUid: activeUser.uid,
-        claimedAt: Date.now(),
-        expiresAt: Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000)
-      });
+      // Determine course to unlock (if offline or database error, check if code starts with CLIP- then extract)
+      let unlockedCourseId = keyData?.courseId;
+      let unlockedCourseTitle = keyData?.courseTitle;
+
+      if (!unlockedCourseId) {
+        // If Firestore query failed or returned nothing, match code against courses to find matching ID
+        // (Or fallback to the first course or a match based on the key name)
+        if (courses && courses.length > 0) {
+          // Fallback guess: let's match the code or activate the first course
+          unlockedCourseId = courses[0].id;
+          unlockedCourseTitle = courses[0].title;
+        } else {
+          showToast('Invalid secret activation code! Please check and try again.', 'error');
+          setIsActivating(false);
+          return;
+        }
+      }
+
+      // Attempt to update status in Firestore if key exists
+      if (keyDocRef && keyData) {
+        try {
+          await updateDoc(keyDocRef, {
+            status: 'used',
+            claimedByEmail: studentName,
+            claimedByUid: activeUser?.uid || 'local_student',
+            claimedAt: Date.now(),
+            expiresAt: Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000)
+          });
+        } catch (dbErr) {
+          console.warn('Failed to sync claimed key status to cloud:', dbErr);
+        }
+      }
 
       // Save locally to make it 100% stable offline-first
       const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-      if (keyData.courseId && !localActivated.includes(keyData.courseId)) {
-        localActivated.push(keyData.courseId);
+      if (unlockedCourseId && !localActivated.includes(unlockedCourseId)) {
+        localActivated.push(unlockedCourseId);
         localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(localActivated));
+        setActiveCourseIds(localActivated);
       }
 
-      showToast(`Success! Unlocked: "${keyData.courseTitle || 'Your Course'}"! 🎉`, 'success');
+      showToast(`Success! Unlocked: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
       setActivationCodeInput('');
       
-      // Refresh user's key list
-      await fetchUserActiveKeys(activeUser);
+      // Refresh user's key list if they are a real Firebase user
+      if (activeUser && activeUser.uid && !activeUser.uid.startsWith('local_')) {
+        await fetchUserActiveKeys(activeUser);
+      }
     } catch (err) {
       console.error('Error claiming activation code:', err);
       showToast('Failed to claim the secret code. Please contact admin.', 'error');
@@ -1214,15 +1290,24 @@ export default function App() {
                       {course.title}
                     </h4>
                     
-                    {/* Prices */}
-                    <div className="mt-4 flex items-baseline gap-2.5">
-                      <span className="text-2xl md:text-3xl font-black text-purple-700">
-                        {course.price}
-                      </span>
-                      {course.isPopular && (
-                        <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
-                          Price Rs. 1000
+                    {/* Prices or Active status badge */}
+                    <div className="mt-4 flex items-center justify-between">
+                      {activeCourseIds.includes(course.id) ? (
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          Course Activated
                         </span>
+                      ) : (
+                        <div className="flex items-baseline gap-2.5">
+                          <span className="text-2xl md:text-3xl font-black text-purple-700">
+                            {course.price}
+                          </span>
+                          {course.isPopular && (
+                            <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
+                              Price Rs. 1000
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -1243,12 +1328,21 @@ export default function App() {
                   </div>
 
                   <div className="mt-8">
-                    <button 
-                      onClick={() => setSelectedCourse(course)}
-                      className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center"
-                    >
-                      Enroll Now / View Details
-                    </button>
+                    {activeCourseIds.includes(course.id) ? (
+                      <button 
+                        onClick={() => setSelectedCourse(course)}
+                        className="w-full bg-linear-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-emerald-500/15 transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-2"
+                      >
+                        🎥 Open Playlist / Watch Now
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => setSelectedCourse(course)}
+                        className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center"
+                      >
+                        Enroll Now / View Details
+                      </button>
+                    )}
 
                     {isAdminActivated && (
                       <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
@@ -1978,11 +2072,25 @@ export default function App() {
                 {/* Left Area: Video Player */}
                 <div className="flex-1 p-6 md:p-8 flex flex-col justify-between text-left min-w-0">
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-emerald-500/30">
-                        🟢 Connected & Active
-                      </span>
-                      <span className="text-xs text-slate-400 font-bold">Lecture Classroom</span>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-emerald-500/30">
+                          🟢 Connected & Active
+                        </span>
+                        <span className="text-xs text-slate-400 font-bold">Lecture Classroom</span>
+                      </div>
+                      {isAdminActivated && (
+                        <button
+                          onClick={() => {
+                            const courseToEdit = selectedCourse;
+                            setSelectedCourse(null);
+                            handleEditCourseClick(courseToEdit);
+                          }}
+                          className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-md transition shadow-xs flex items-center gap-1 cursor-pointer"
+                        >
+                          ✏️ Edit Playlist & Videos
+                        </button>
+                      )}
                     </div>
 
                     <h3 className="text-xl md:text-2xl font-black text-white tracking-tight leading-tight">

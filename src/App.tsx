@@ -222,21 +222,12 @@ export default function App() {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   // QR modal state
   const [showQrModal, setShowQrModal] = useState(false);
-  // Inline QR mode state
-  const [showQrInline, setShowQrInline] = useState(false);
   // User navigation menu state
   const [showUserMenu, setShowUserMenu] = useState(false);
   // User profile modal state
   const [showProfileModal, setShowProfileModal] = useState(false);
   // Canvas ref for FonePay QR
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Reset inline QR mode when modal changes
-  useEffect(() => {
-    if (!selectedCourse) {
-      setShowQrInline(false);
-    }
-  }, [selectedCourse]);
 
   // FAQ open indexes
   const [openFaqs, setOpenFaqs] = useState<Record<number, boolean>>({});
@@ -473,9 +464,9 @@ export default function App() {
     }
   }, [filteredTestimonials.length, currentSlide]);
 
-  // Render QR Code inside canvas once QR modal opens or inline QR is activated
+  // Render QR Code inside canvas once QR modal opens
   useEffect(() => {
-    if ((showQrModal || showQrInline) && selectedCourse && qrCanvasRef.current) {
+    if (showQrModal && selectedCourse && qrCanvasRef.current) {
       // payload from original code
       const qrPayload = "00020101021126350011fonepay.com071622226100158730565204527153035245802NP5915Prakash Store 16012Pokhariya MC62110707162568663048986";
       QRCode.toCanvas(
@@ -497,7 +488,7 @@ export default function App() {
         }
       );
     }
-  }, [showQrModal, showQrInline, selectedCourse]);
+  }, [showQrModal, selectedCourse]);
 
   // Scroll to bottom of chat
   useEffect(() => {
@@ -1694,64 +1685,23 @@ export default function App() {
               </div>
 
               {/* Purchase options CTA */}
-              {showQrInline ? (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="mt-6 border-t border-slate-100 pt-6 text-center"
+              <div className="mt-8 flex flex-col gap-3">
+                <a 
+                  href={`https://wa.me/9779763323268?text=${encodeURIComponent(selectedCourse.message)}`}
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2"
                 >
-                  <h4 className="text-base font-black text-slate-900 flex items-center justify-center gap-2">
-                    <QrCode className="w-5 h-5 text-purple-700 animate-pulse" />
-                    Scan to Pay (eSewa / Khalti / Mobile Banking)
-                  </h4>
-                  <p className="text-xs text-slate-500 font-semibold mt-1">
-                    यो QR स्क्यान गरी {selectedCourse.price} भुक्तानी गर्नुहोस्
-                  </p>
-
-                  {/* QR Code Canvas */}
-                  <div className="my-5 p-3.5 bg-slate-50 border border-slate-100 rounded-2xl inline-block shadow-inner">
-                    <canvas ref={qrCanvasRef} className="mx-auto max-w-[220px]" />
-                  </div>
-
-                  <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200/50 text-[11px] text-amber-800 font-bold leading-normal mb-5 text-left">
-                    📌 भुक्तानी सफल भएपछि स्क्रिनसट लिनुहोस् र तलको हरियो बटन थिचेर हामीलाई WhatsApp मा पठाउनुहोस्। त्यसपछि तपाईंको कोर्ष तत्काल सक्रिय हुनेछ।
-                  </div>
-
-                  <div className="flex flex-col gap-2.5">
-                    <button 
-                      onClick={handleConfirmPayment}
-                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-3.5 px-6 rounded-xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Send className="w-4 h-4" /> भुक्तानी गरेँ, WhatsApp मा पठाउनुहोस्
-                    </button>
-                    
-                    <button 
-                      onClick={() => setShowQrInline(false)}
-                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-center transition cursor-pointer"
-                    >
-                      पछाडि फर्कनुहोस् (Go Back)
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                <div className="mt-8 flex flex-col gap-3">
-                  <a 
-                    href={`https://wa.me/9779763323268?text=${encodeURIComponent(selectedCourse.message)}`}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg shadow-emerald-500/10 transition flex items-center justify-center gap-2"
-                  >
-                    <Send className="w-4 h-4" /> WhatsApp बाट किन्नुहोस्
-                  </a>
-                  
-                  <button 
-                    onClick={() => setShowQrInline(true)}
-                    className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Khalti)</span>
-                  </button>
-                </div>
-              )}
+                  <Send className="w-4 h-4" /> WhatsApp बाट किन्नुहोस्
+                </a>
+                
+                <button 
+                  onClick={handleOpenFonePayQR}
+                  className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Khalti)</span>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

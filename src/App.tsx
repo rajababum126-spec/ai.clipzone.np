@@ -177,9 +177,28 @@ export default function App() {
           setCourses(sortedCourses);
           localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
         }
-      } catch (err) {
-        console.error('Failed to load courses from Firestore:', err);
-        handleFirestoreError(err, OperationType.GET, 'courses');
+      } catch (err: any) {
+        console.warn('Failed to load courses from Firestore. Falling back to local cache or default courses:', err);
+        
+        // Try to load from localStorage cache first
+        const cached = localStorage.getItem('clipzone_dynamic_courses');
+        if (cached) {
+          try {
+            setCourses(JSON.parse(cached));
+          } catch (jsonErr) {
+            setCourses(COURSES);
+          }
+        } else {
+          setCourses(COURSES);
+        }
+
+        // Only call handleFirestoreError (which throws and is caught by diagnostics) if it's a security/permission issue.
+        // Doing so keeps the application robust and fully functional even when the sandbox/connection is offline.
+        if (err && err.code === 'permission-denied') {
+          handleFirestoreError(err, OperationType.GET, 'courses');
+        } else {
+          showToast('Loaded database from local cache.', 'info');
+        }
       }
     };
     fetchCourses();
@@ -403,14 +422,21 @@ export default function App() {
       // Look up key in Firestore
       let keyData: any = null;
       let keyDocRef = null;
+      let firestoreError = false;
       try {
         keyDocRef = doc(db, 'activation_keys', cleanCode);
         const keyDocSnap = await getDoc(keyDocRef);
         if (keyDocSnap.exists()) {
           keyData = keyDocSnap.data();
+        } else {
+          // Key doesn't exist in Firestore
+          showToast('Invalid secret activation code! Please check and try again.', 'error');
+          setIsActivating(false);
+          return;
         }
       } catch (dbErr) {
         console.warn('Failed to query activation key from Firestore, using offline sandbox lookup:', dbErr);
+        firestoreError = true;
       }
 
       // If Firestore key was loaded and is already claimed, block
@@ -425,10 +451,8 @@ export default function App() {
       let unlockedCourseTitle = keyData?.courseTitle;
 
       if (!unlockedCourseId) {
-        // If Firestore query failed or returned nothing, match code against courses to find matching ID
-        // (Or fallback to the first course or a match based on the key name)
-        if (courses && courses.length > 0) {
-          // Fallback guess: let's match the code or activate the first course
+        // Fallback offline guess only if Firestore error occurred
+        if (firestoreError && courses && courses.length > 0) {
           unlockedCourseId = courses[0].id;
           unlockedCourseTitle = courses[0].title;
         } else {
@@ -592,6 +616,9 @@ export default function App() {
   const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
   const [activationCodeInput, setActivationCodeInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
+  const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
+  const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
+  const [currentView, setCurrentView] = useState<'home' | 'classroom'>('home');
 
   // Auth Form Fields
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -1144,12 +1171,38 @@ export default function App() {
               </div>
             )}
           </div>
-          <div className="hidden sm:flex items-center gap-4 text-xs font-semibold text-purple-100 bg-purple-950/40 px-3 py-1.5 rounded-full border border-purple-500/30">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            Nepal's #1 AI Academy • Trusted by 1000+ Students
+          <div className="hidden sm:flex items-center gap-1.5 bg-purple-950/50 p-1 rounded-full border border-purple-500/30">
+            <button
+              onClick={() => {
+                setCurrentView('home');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                showToast('Welcome Home! 🏠', 'info');
+              }}
+              className={`px-3.5 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
+                currentView === 'home'
+                  ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
+                  : 'text-purple-100 hover:text-white hover:bg-purple-900/40'
+              }`}
+            >
+              🏠 Home Page
+            </button>
+            <button
+              onClick={() => {
+                setCurrentView('classroom');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                showToast('Welcome to Your Classroom! 🎓', 'info');
+              }}
+              className={`px-3.5 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
+                currentView === 'classroom'
+                  ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
+                  : 'text-purple-100 hover:text-white hover:bg-purple-900/40'
+              }`}
+            >
+              🎓 Course Page
+              {activeCourseIds.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping border border-purple-950" />
+              )}
+            </button>
           </div>
           <div className="flex items-center gap-3">
             <a 
@@ -1189,6 +1242,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
+                        setCurrentView('home');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                         showToast('Welcome Home! 🏠', 'info');
                       }}
@@ -1200,15 +1254,13 @@ export default function App() {
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
-                        const catalogElement = document.getElementById('courses-section');
-                        if (catalogElement) {
-                          catalogElement.scrollIntoView({ behavior: 'smooth' });
-                          showToast('Sifting through Courses! 📚', 'info');
-                        }
+                        setCurrentView('classroom');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        showToast('Your Course Classroom! 🎓', 'info');
                       }}
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
                     >
-                      📚 Course Page
+                      🎓 Course Page
                     </button>
 
                     <button
@@ -1226,6 +1278,41 @@ export default function App() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile Tab Switcher (Visible only on mobile/small screens) */}
+      <div className="sm:hidden w-full bg-slate-900 border-b border-slate-800 py-2 px-4 sticky top-[65px] z-40 shadow-sm flex gap-2">
+        <button
+          onClick={() => {
+            setCurrentView('home');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            showToast('Home Page! 🏠', 'info');
+          }}
+          className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 ${
+            currentView === 'home'
+              ? 'bg-amber-400 text-slate-950 shadow-sm'
+              : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
+          }`}
+        >
+          🏠 Home Page
+        </button>
+        <button
+          onClick={() => {
+            setCurrentView('classroom');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            showToast('My Classroom! 🎓', 'info');
+          }}
+          className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
+            currentView === 'classroom'
+              ? 'bg-amber-400 text-slate-950 shadow-sm'
+              : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
+          }`}
+        >
+          🎓 Course Page
+          {activeCourseIds.length > 0 && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+          )}
+        </button>
       </div>
 
       {/* Main Container for Course List */}
@@ -1246,165 +1333,378 @@ export default function App() {
             </p>
           </div>
 
-          {/* Courses Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
-            {courses.map((course, index) => (
-              <motion.div
-                key={course.id}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-50px' }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ y: -6 }}
-                className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full"
-              >
-                {course.isPopular && (
-                  <div className="absolute top-0 inset-x-0 bg-rose-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
-                    {course.popularText || '🔥 MOST POPULAR - BEST SELLER'}
-                  </div>
-                )}
+          {/* Courses Cards Grid or Live Embedded Classroom */}
+          {currentView === 'classroom' ? (
+            activeCourseIds.length > 0 ? (
+              <div className="space-y-12 text-left">
+              <div className="bg-emerald-50 border border-emerald-200/60 rounded-3xl p-6 text-center max-w-2xl mx-auto shadow-sm">
+                <span className="text-2xl">🎓</span>
+                <h4 className="text-lg font-black text-emerald-950 mt-2">Welcome Back to Your Classroom!</h4>
+                <p className="text-xs text-emerald-800 mt-1 font-medium">
+                  तपाईंले एक्टिभेट गर्नुभएको कोर्षको सूची र प्लेलिस्ट तल उपलब्ध छ। सिधै भिडियोहरू हेर्नुहोस् र सिक्नुहोस्!
+                </p>
+              </div>
 
-                {/* Course Thumbnail Image */}
-                <div className="relative aspect-video overflow-hidden bg-slate-950">
-                  <img 
-                    src={course.image} 
-                    alt={course.title}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                    <span className="bg-purple-950/80 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-lg border border-purple-500/20">
-                      Lifetime Access
-                    </span>
-                    <span className="bg-amber-500 text-slate-950 text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
-                      Instant Delivery
-                    </span>
-                  </div>
+              <div className="space-y-12">
+                {courses
+                  .filter(course => activeCourseIds.includes(course.id))
+                  .map((course) => {
+                    const currentIdx = pageVideoIndexes[course.id] || 0;
+                    const activePlaylist = course.videos && course.videos.length > 0
+                      ? course.videos
+                      : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
+                    const currentLecture = activePlaylist[currentIdx] || activePlaylist[0];
+
+                    // Extract Youtube ID safely
+                    const getYouTubeId = (url: string): string => {
+                      if (!url) return '';
+                      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                      const match = url.match(regExp);
+                      return (match && match[2].length === 11) ? match[2] : '';
+                    };
+
+                    const ytId = getYouTubeId(currentLecture.videoUrl);
+                    const secureEmbedSrc = ytId
+                      ? `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3&disablekb=1&autoplay=0`
+                      : currentLecture.videoUrl;
+
+                    return (
+                      <motion.div
+                        key={course.id}
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-slate-950 border border-slate-800 text-white rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden"
+                      >
+                        {/* Course Header Banner */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
+                          <div className="space-y-2 text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-emerald-500/30">
+                                🟢 Activated Course
+                              </span>
+                              <span className="text-xs text-slate-400 font-bold">Your Classroom Playlist</span>
+                            </div>
+                            <h4 className="text-xl md:text-3xl font-black text-white tracking-tight leading-tight">
+                              {course.title}
+                            </h4>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isAdminActivated && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditCourseClick(course)}
+                                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  ✏️ Edit Playlist & Videos
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCourse(course.id)}
+                                  className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Interactive Player + List Splitter */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
+                          {/* Video player view container */}
+                          <div className="lg:col-span-8 space-y-4">
+                            <div className="relative aspect-video w-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800/80 group">
+                              {/* Anti-right click context guardian */}
+                              <div 
+                                onContextMenu={(e) => e.preventDefault()}
+                                className="absolute inset-0 z-50 pointer-events-none"
+                              />
+
+                              {/* Live floating watermark safety */}
+                              <div className="absolute bottom-3 left-4 z-40 bg-slate-950/70 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-slate-800/60 pointer-events-none select-none">
+                                <p className="text-[10px] text-slate-400 font-mono font-bold flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  {currentUser?.email || localStorage.getItem('clipzone_student_name') || 'Student Learner'} • Active Session
+                                </p>
+                              </div>
+
+                              <iframe
+                                src={secureEmbedSrc}
+                                className="w-full h-full object-cover"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowFullScreen
+                                title={currentLecture.title}
+                              />
+                            </div>
+
+                            {/* Currently Playing Status details */}
+                            <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800/50 text-left">
+                              <span className="text-[9px] font-black text-amber-400 uppercase tracking-wider block font-sans">Currently Playing Lecture:</span>
+                              <h5 className="text-sm md:text-base font-extrabold text-white mt-1">
+                                {currentLecture.title}
+                              </h5>
+                              <p className="text-xs text-slate-400 font-medium flex items-center gap-2 mt-1">
+                                ⏳ Video Duration: {currentLecture.duration} minutes
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Interactive Playlist Side Rail */}
+                          <div className="lg:col-span-4 bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex flex-col h-full text-left max-h-[450px]">
+                            <h5 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-4">
+                              📖 Course Lecture Playlist ({activePlaylist.length})
+                            </h5>
+
+                            <div className="space-y-2 overflow-y-auto pr-1 flex-1 max-h-[350px]">
+                              {activePlaylist.map((video, idx) => (
+                                <div
+                                  key={idx}
+                                  onClick={() => {
+                                    setPageVideoIndexes(prev => ({ ...prev, [course.id]: idx }));
+                                    showToast(`Loading: ${video.title}`, 'info');
+                                  }}
+                                  className={`p-3 rounded-xl border transition cursor-pointer flex items-start gap-3 text-xs ${
+                                    currentIdx === idx
+                                      ? 'bg-purple-900/40 border-purple-500/50 text-purple-200 shadow-md shadow-purple-950/25'
+                                      : 'bg-slate-950 hover:bg-slate-800 border-slate-900 text-slate-300'
+                                  }`}
+                                >
+                                  <div className="w-5 h-5 rounded-lg bg-slate-900 text-purple-400 border border-slate-800 flex items-center justify-center font-black shrink-0 text-[10px]">
+                                    {idx + 1}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-extrabold line-clamp-2 leading-tight">{video.title}</p>
+                                    <span className="text-[9px] text-slate-500 font-mono mt-1 block">⏳ {video.duration} mins</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+              </div>
+
+              {/* Dynamic Course Creator add-on for Admin directly under active listing */}
+              {isAdminActivated && (
+                <div className="flex justify-center mt-6">
+                  <button
+                    onClick={handleCreateCourseClick}
+                    className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs py-3 px-6 rounded-xl transition duration-150 flex items-center gap-2 cursor-pointer shadow-md shadow-purple-900/10 font-sans"
+                  >
+                    ➕ Add Another Course (Admin Control)
+                  </button>
                 </div>
+              )}
+            </div>
+          ) : (
+            /* ==================== CLASSROOM EMPTY STATE ==================== */
+            <div className="max-w-xl mx-auto bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xl text-center space-y-6 my-8">
+              <div className="w-16 h-16 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
+                🗝️
+              </div>
+              <div>
+                <h4 className="text-lg font-extrabold text-slate-950 font-sans">Activate Your Premium Course Access</h4>
+                <p className="text-xs text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed font-semibold">
+                  तपाईंसँग भएको Secret Activation Code यहाँ राखी आफ्नो कोर्ष अनलक गर्नुहोस्।
+                </p>
+              </div>
 
-                {/* Course Info */}
-                <div className="p-6 md:p-8 flex flex-col grow justify-between">
-                  <div>
-                    <h4 className="text-xl md:text-2xl font-extrabold text-slate-900 group-hover:text-purple-700 transition-colors">
-                      {course.title}
-                    </h4>
-                    
-                    {/* Prices or Active status badge */}
-                    <div className="mt-4 flex items-center justify-between">
-                      {activeCourseIds.includes(course.id) ? (
-                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          Course Activated
-                        </span>
-                      ) : (
-                        <div className="flex items-baseline gap-2.5">
-                          <span className="text-2xl md:text-3xl font-black text-purple-700">
-                            {course.price}
+              <form onSubmit={handleClaimActivationCode} className="space-y-3">
+                <input 
+                  type="text"
+                  value={activationCodeInput}
+                  onChange={(e) => setActivationCodeInput(e.target.value)}
+                  placeholder="CLIP-XXXXXX"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-2xl px-4 py-3.5 text-sm font-mono font-black uppercase outline-hidden text-center tracking-widest transition"
+                />
+                <button
+                  type="submit"
+                  disabled={isActivating || !activationCodeInput.trim()}
+                  className="w-full bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-black py-3.5 rounded-2xl text-xs transition cursor-pointer shadow-lg shadow-purple-900/10 font-sans"
+                >
+                  {isActivating ? 'Activating Course...' : 'Unlock Instant Access ⚡'}
+                </button>
+              </form>
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-center gap-2">
+                <button 
+                  onClick={() => {
+                    setCurrentView('home');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-xs font-black text-purple-700 hover:text-purple-900 transition flex items-center gap-1 cursor-pointer font-sans"
+                >
+                  🌐 Browse All Available Courses First
+                </button>
+              </div>
+            </div>
+          )) : (
+            /* ==================== HOME PAGE VIEW ==================== */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
+              {courses.map((course, index) => (
+                <motion.div
+                  key={course.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-50px' }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ y: -6 }}
+                  className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full"
+                >
+                  {course.isPopular && (
+                    <div className="absolute top-0 inset-x-0 bg-rose-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
+                      {course.popularText || '🔥 MOST POPULAR - BEST SELLER'}
+                    </div>
+                  )}
+
+                  {/* Course Thumbnail Image */}
+                  <div className="relative aspect-video overflow-hidden bg-slate-950">
+                    <img 
+                      src={course.image} 
+                      alt={course.title}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
+                    <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                      <span className="bg-purple-950/80 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-lg border border-purple-500/20">
+                        Lifetime Access
+                      </span>
+                      <span className="bg-amber-500 text-slate-950 text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
+                        Instant Delivery
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Course Info */}
+                  <div className="p-6 md:p-8 flex flex-col grow justify-between">
+                    <div className="text-left font-sans">
+                      <h4 className="text-xl md:text-2xl font-extrabold text-slate-900 group-hover:text-purple-700 transition-colors">
+                        {course.title}
+                      </h4>
+                      
+                      {/* Prices or Active status badge */}
+                      <div className="mt-4 flex items-center justify-between">
+                        {activeCourseIds.includes(course.id) ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Course Activated
                           </span>
-                          {course.isPopular && (
-                            <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
-                              Price Rs. 1000
+                        ) : (
+                          <div className="flex items-baseline gap-2.5">
+                            <span className="text-2xl md:text-3xl font-black text-purple-700">
+                              {course.price}
                             </span>
-                          )}
+                            {course.isPopular && (
+                              <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
+                                Price Rs. 1000
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="text-slate-500 text-xs md:text-sm mt-3 font-semibold flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                        Language: {course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi' : 'Nepali'} • Includes Certificate
+                      </p>
+
+                      {/* Highlights checklist */}
+                      <ul className="mt-6 space-y-2.5">
+                        {course.learn.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2.5 text-slate-600 text-sm">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="mt-8">
+                      {activeCourseIds.includes(course.id) ? (
+                        <button 
+                          onClick={() => {
+                            setCurrentView('classroom');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                            showToast(`Opening "${course.title}" Playlist! 🎥`, 'info');
+                          }}
+                          className="w-full bg-linear-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-emerald-500/15 transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-2 font-sans"
+                        >
+                          🎥 Open Playlist / Watch Now
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => setSelectedCourse(course)}
+                          className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center font-sans"
+                        >
+                          Enroll Now / View Details
+                        </button>
+                      )}
+
+                      {isAdminActivated && (
+                        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => handleEditCourseClick(course)}
+                              className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                            >
+                              ✏️ Edit Course
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCourse(course.id)}
+                              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                          <div className="flex gap-2 justify-between items-center bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                            <span className="text-[10px] font-black uppercase text-slate-400 pl-1.5">Move/Reorder:</span>
+                            <div className="flex gap-1.5">
+                              <button
+                                disabled={index === 0}
+                                onClick={() => handleMoveCourse(index, 'up')}
+                                className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                                title="Move Course Up/Left"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                disabled={index === courses.length - 1}
+                                onClick={() => handleMoveCourse(index, 'down')}
+                                className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                                title="Move Course Down/Right"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
-
-                    <p className="text-slate-500 text-xs md:text-sm mt-3 font-semibold flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                      Language: {course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi' : 'Nepali'} • Includes Certificate
-                    </p>
-
-                    {/* Highlights checklist */}
-                    <ul className="mt-6 space-y-2.5">
-                      {course.learn.map((item, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-slate-600 text-sm">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
+                </motion.div>
+              ))}
 
-                  <div className="mt-8">
-                    {activeCourseIds.includes(course.id) ? (
-                      <button 
-                        onClick={() => setSelectedCourse(course)}
-                        className="w-full bg-linear-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-emerald-500/15 transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-2"
-                      >
-                        🎥 Open Playlist / Watch Now
-                      </button>
-                    ) : (
-                      <button 
-                        onClick={() => setSelectedCourse(course)}
-                        className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center"
-                      >
-                        Enroll Now / View Details
-                      </button>
-                    )}
-
-                    {isAdminActivated && (
-                      <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
-                        <div className="flex gap-3">
-                          <button
-                            onClick={() => handleEditCourseClick(course)}
-                            className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            ✏️ Edit Course
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCourse(course.id)}
-                            className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            🗑️ Delete
-                          </button>
-                        </div>
-                        <div className="flex gap-2 justify-between items-center bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                          <span className="text-[10px] font-black uppercase text-slate-400 pl-1.5">Move/Reorder:</span>
-                          <div className="flex gap-1.5">
-                            <button
-                              disabled={index === 0}
-                              onClick={() => handleMoveCourse(index, 'up')}
-                              className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                              title="Move Course Up/Left"
-                            >
-                              <ArrowUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              disabled={index === courses.length - 1}
-                              onClick={() => handleMoveCourse(index, 'down')}
-                              className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                              title="Move Course Down/Right"
-                            >
-                              <ArrowDown className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+              {isAdminActivated && (
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-50px' }}
+                  whileHover={{ scale: 1.01 }}
+                  onClick={handleCreateCourseClick}
+                  className="bg-slate-50 hover:bg-slate-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md border-2 border-dashed border-slate-300 hover:border-purple-500 transition-all duration-300 flex flex-col items-center justify-center p-8 text-center min-h-[350px] cursor-pointer group font-sans"
+                >
+                  <div className="w-16 h-16 bg-purple-50 border border-purple-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-purple-600">
+                    <Plus className="w-8 h-8" />
                   </div>
-                </div>
-              </motion.div>
-            ))}
-
-            {isAdminActivated && (
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-50px' }}
-                whileHover={{ scale: 1.01 }}
-                onClick={handleCreateCourseClick}
-                className="bg-slate-50 hover:bg-slate-100 rounded-3xl overflow-hidden shadow-sm hover:shadow-md border-2 border-dashed border-slate-300 hover:border-purple-500 transition-all duration-300 flex flex-col items-center justify-center p-8 text-center min-h-[350px] cursor-pointer group"
-              >
-                <div className="w-16 h-16 bg-purple-50 border border-purple-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-purple-600">
-                  <Plus className="w-8 h-8" />
-                </div>
-                <strong className="text-lg font-black text-slate-800 block">Add Another Course</strong>
-                <span className="text-xs text-slate-500 mt-2 block max-w-xs">Click here to dynamically add a new course with custom pricing, learn checklist, and videos to Firestore database.</span>
-              </motion.div>
-            )}
-          </div>
+                  <strong className="text-lg font-black text-slate-800 block">Add Another Course</strong>
+                  <span className="text-xs text-slate-500 mt-2 block max-w-xs">Click here to dynamically add a new course with custom pricing, learn checklist, and videos to Firestore database.</span>
+                </motion.div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Testimonials, FAQs, and contact form sequential flows */}

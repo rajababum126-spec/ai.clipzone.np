@@ -106,6 +106,13 @@ function cleanUndefined<T extends object>(obj: T): T {
   return clean;
 }
 
+function getYouTubeIdGlobal(url: string): string {
+  if (!url) return '';
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : '';
+}
+
 export default function App() {
   // Admin Mode states
   const [showAdminMenu, setShowAdminMenu] = useState(false);
@@ -619,6 +626,14 @@ export default function App() {
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'classroom'>('home');
+  const [fullscreenVideo, setFullscreenVideo] = useState<{
+    courseTitle: string;
+    title: string;
+    videoUrl: string;
+    idx: number;
+    playlist: { title: string; duration: string; videoUrl: string }[];
+    courseId: string;
+  } | null>(null);
 
   // Auth Form Fields
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -1337,154 +1352,140 @@ export default function App() {
           {currentView === 'classroom' ? (
             activeCourseIds.length > 0 ? (
               <div className="space-y-12 text-left">
-              <div className="bg-emerald-50 border border-emerald-200/60 rounded-3xl p-6 text-center max-w-2xl mx-auto shadow-sm">
-                <span className="text-2xl">🎓</span>
-                <h4 className="text-lg font-black text-emerald-950 mt-2">Welcome Back to Your Classroom!</h4>
-                <p className="text-xs text-emerald-800 mt-1 font-medium">
-                  तपाईंले एक्टिभेट गर्नुभएको कोर्षको सूची र प्लेलिस्ट तल उपलब्ध छ। सिधै भिडियोहरू हेर्नुहोस् र सिक्नुहोस्!
-                </p>
-              </div>
+                {/* Clean, minimal header instruction instead of a massive card */}
+                <div className="text-center max-w-xl mx-auto pb-4">
+                  <span className="text-3xl">🎯</span>
+                  <h4 className="text-lg font-extrabold text-slate-900 mt-2">Choose a Video to Start Learning</h4>
+                  <p className="text-xs text-slate-500 mt-1 font-semibold leading-relaxed">
+                    प्लेलिस्टको कुनै पनि भिडियोमा क्लिक गरी सिधै Full Screen मा हेरेर सिक्न सुरु गर्नुहोस्!
+                  </p>
+                </div>
 
-              <div className="space-y-12">
-                {courses
-                  .filter(course => activeCourseIds.includes(course.id))
-                  .map((course) => {
-                    const currentIdx = pageVideoIndexes[course.id] || 0;
-                    const activePlaylist = course.videos && course.videos.length > 0
-                      ? course.videos
-                      : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
-                    const currentLecture = activePlaylist[currentIdx] || activePlaylist[0];
+                <div className="space-y-12">
+                  {courses
+                    .filter(course => activeCourseIds.includes(course.id))
+                    .map((course) => {
+                      const activePlaylist = course.videos && course.videos.length > 0
+                        ? course.videos
+                        : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
 
-                    // Extract Youtube ID safely
-                    const getYouTubeId = (url: string): string => {
-                      if (!url) return '';
-                      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-                      const match = url.match(regExp);
-                      return (match && match[2].length === 11) ? match[2] : '';
-                    };
-
-                    const ytId = getYouTubeId(currentLecture.videoUrl);
-                    const secureEmbedSrc = ytId
-                      ? `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3&disablekb=1&autoplay=0`
-                      : currentLecture.videoUrl;
-
-                    return (
-                      <motion.div
-                        key={course.id}
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-slate-950 border border-slate-800 text-white rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden"
-                      >
-                        {/* Course Header Banner */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
-                          <div className="space-y-2 text-left">
-                            <div className="flex items-center gap-2">
-                              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-emerald-500/30">
-                                🟢 Activated Course
-                              </span>
-                              <span className="text-xs text-slate-400 font-bold">Your Classroom Playlist</span>
-                            </div>
-                            <h4 className="text-xl md:text-3xl font-black text-white tracking-tight leading-tight">
-                              {course.title}
-                            </h4>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            {isAdminActivated && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditCourseClick(course)}
-                                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  ✏️ Edit Playlist & Videos
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteCourse(course.id)}
-                                  className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  🗑️ Delete
-                                </button>
+                      return (
+                        <motion.div
+                          key={course.id}
+                          initial={{ opacity: 0, y: 30 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-slate-950 border border-slate-800 text-white rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden"
+                        >
+                          {/* Course Header Banner */}
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
+                            <div className="space-y-2 text-left">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-purple-500/20 text-purple-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-purple-500/30">
+                                  🟢 Activated Course
+                                </span>
+                                <span className="text-xs text-slate-400 font-bold">({activePlaylist.length} Lectures)</span>
                               </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Interactive Player + List Splitter */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
-                          {/* Video player view container */}
-                          <div className="lg:col-span-8 space-y-4">
-                            <div className="relative aspect-video w-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800/80 group">
-                              {/* Anti-right click context guardian */}
-                              <div 
-                                onContextMenu={(e) => e.preventDefault()}
-                                className="absolute inset-0 z-50 pointer-events-none"
-                              />
-
-                              {/* Live floating watermark safety */}
-                              <div className="absolute bottom-3 left-4 z-40 bg-slate-950/70 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-slate-800/60 pointer-events-none select-none">
-                                <p className="text-[10px] text-slate-400 font-mono font-bold flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                  {currentUser?.email || localStorage.getItem('clipzone_student_name') || 'Student Learner'} • Active Session
-                                </p>
-                              </div>
-
-                              <iframe
-                                src={secureEmbedSrc}
-                                className="w-full h-full object-cover"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                allowFullScreen
-                                title={currentLecture.title}
-                              />
+                              <h4 className="text-xl md:text-3xl font-black text-white tracking-tight leading-tight">
+                                {course.title}
+                              </h4>
                             </div>
 
-                            {/* Currently Playing Status details */}
-                            <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800/50 text-left">
-                              <span className="text-[9px] font-black text-amber-400 uppercase tracking-wider block font-sans">Currently Playing Lecture:</span>
-                              <h5 className="text-sm md:text-base font-extrabold text-white mt-1">
-                                {currentLecture.title}
-                              </h5>
-                              <p className="text-xs text-slate-400 font-medium flex items-center gap-2 mt-1">
-                                ⏳ Video Duration: {currentLecture.duration} minutes
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Interactive Playlist Side Rail */}
-                          <div className="lg:col-span-4 bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex flex-col h-full text-left max-h-[450px]">
-                            <h5 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-4">
-                              📖 Course Lecture Playlist ({activePlaylist.length})
-                            </h5>
-
-                            <div className="space-y-2 overflow-y-auto pr-1 flex-1 max-h-[350px]">
-                              {activePlaylist.map((video, idx) => (
-                                <div
-                                  key={idx}
-                                  onClick={() => {
-                                    setPageVideoIndexes(prev => ({ ...prev, [course.id]: idx }));
-                                    showToast(`Loading: ${video.title}`, 'info');
-                                  }}
-                                  className={`p-3 rounded-xl border transition cursor-pointer flex items-start gap-3 text-xs ${
-                                    currentIdx === idx
-                                      ? 'bg-purple-900/40 border-purple-500/50 text-purple-200 shadow-md shadow-purple-950/25'
-                                      : 'bg-slate-950 hover:bg-slate-800 border-slate-900 text-slate-300'
-                                  }`}
-                                >
-                                  <div className="w-5 h-5 rounded-lg bg-slate-900 text-purple-400 border border-slate-800 flex items-center justify-center font-black shrink-0 text-[10px]">
-                                    {idx + 1}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-extrabold line-clamp-2 leading-tight">{video.title}</p>
-                                    <span className="text-[9px] text-slate-500 font-mono mt-1 block">⏳ {video.duration} mins</span>
-                                  </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {isAdminActivated && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleEditCourseClick(course)}
+                                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    ✏️ Edit Playlist & Videos
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCourse(course.id)}
+                                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    🗑️ Delete
+                                  </button>
                                 </div>
-                              ))}
+                              )}
                             </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-              </div>
+
+                          {/* Beautiful Playlist Cards Grid for Direct Fullscreen Launch */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-8">
+                            {activePlaylist.map((video, idx) => {
+                              const ytId = getYouTubeIdGlobal(video.videoUrl);
+                              const videoThumbnail = ytId
+                                ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`
+                                : course.image;
+
+                              return (
+                                <motion.div
+                                  key={idx}
+                                  whileHover={{ y: -6, scale: 1.02 }}
+                                  onClick={() => {
+                                    const securePlayUrl = ytId
+                                      ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3`
+                                      : video.videoUrl;
+                                    setFullscreenVideo({
+                                      courseTitle: course.title,
+                                      title: video.title,
+                                      videoUrl: securePlayUrl,
+                                      idx: idx,
+                                      playlist: activePlaylist,
+                                      courseId: course.id,
+                                    });
+                                    showToast(`Opening "${video.title}" in Fullscreen! 🎥`, 'success');
+                                  }}
+                                  className="group bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden cursor-pointer hover:border-purple-500/60 transition-all duration-300 flex flex-col h-full relative"
+                                >
+                                  {/* Video Thumbnail with Play Badge */}
+                                  <div className="relative aspect-video w-full bg-slate-950 overflow-hidden">
+                                    <img
+                                      src={videoThumbnail}
+                                      alt={video.title}
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    />
+
+                                    {/* Glassy Play Icon Overlay */}
+                                    <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/65 transition-colors duration-300 flex items-center justify-center">
+                                      <div className="w-12 h-12 rounded-full bg-purple-600/90 hover:bg-purple-600 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-all duration-300">
+                                        <Play className="w-5 h-5 fill-white ml-0.5" />
+                                      </div>
+                                    </div>
+
+                                    {/* Top-Left Lecture Badge */}
+                                    <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-lg border border-slate-800/60">
+                                      <span className="text-[10px] text-purple-300 font-mono font-black">
+                                        Lecture {idx + 1}
+                                      </span>
+                                    </div>
+
+                                    {/* Bottom-Right Duration Badge */}
+                                    <div className="absolute bottom-3 right-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-lg border border-slate-800/60">
+                                      <span className="text-[10px] text-slate-300 font-mono font-semibold">
+                                        ⏳ {video.duration} mins
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Text Info */}
+                                  <div className="p-4 flex flex-col justify-between grow text-left space-y-2">
+                                    <h5 className="text-sm font-extrabold text-white group-hover:text-purple-400 transition-colors line-clamp-2 leading-snug">
+                                      {video.title}
+                                    </h5>
+                                    <span className="text-[10px] text-purple-400 font-black uppercase tracking-wider block">
+                                      Watch in Fullscreen ⚡
+                                    </span>
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                </div>
 
               {/* Dynamic Course Creator add-on for Admin directly under active listing */}
               {isAdminActivated && (
@@ -3604,6 +3605,121 @@ export default function App() {
         </AnimatePresence>
 
       </div>
+
+      {/* Fullscreen Immersive Video Player Overlay */}
+      {fullscreenVideo && (
+        <div 
+          className="fixed inset-0 bg-black z-[9999] flex flex-col md:flex-row text-white font-sans overflow-hidden"
+          style={{ width: '100vw', height: '100vh' }}
+        >
+          {/* Main Video Area */}
+          <div className="flex-1 relative flex flex-col justify-center bg-black h-full">
+            {/* Top Bar Controls */}
+            <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 to-transparent p-4 flex items-center justify-between z-50">
+              <div className="text-left pr-4">
+                <span className="text-[10px] text-purple-400 font-black uppercase tracking-widest block font-sans">
+                  {fullscreenVideo.courseTitle}
+                </span>
+                <h4 className="text-white text-xs md:text-base font-black truncate max-w-[280px] sm:max-w-md md:max-w-xl font-sans mt-0.5">
+                  {fullscreenVideo.title} (Lecture {fullscreenVideo.idx + 1})
+                </h4>
+              </div>
+              <button
+                onClick={() => {
+                  setFullscreenVideo(null);
+                }}
+                className="bg-slate-900/80 hover:bg-rose-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1 font-sans shadow-lg"
+              >
+                <X className="w-4 h-4" />
+                <span className="hidden sm:inline">Exit Fullscreen</span>
+              </button>
+            </div>
+
+            {/* Embed Video Iframe */}
+            <div className="relative w-full aspect-video max-h-full bg-black overflow-hidden flex items-center justify-center">
+              {/* Context guard to prevent direct saving */}
+              <div 
+                onContextMenu={(e) => e.preventDefault()}
+                className="absolute inset-0 z-50 pointer-events-none"
+              />
+
+              {/* Watermark in fullscreen */}
+              <div className="absolute bottom-6 left-6 z-40 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-purple-500/20 pointer-events-none select-none shadow-lg">
+                <p className="text-[9px] md:text-[10px] text-slate-300 font-mono font-bold flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {currentUser?.email || localStorage.getItem('clipzone_student_name') || 'Student Learner'} • Verified Session
+                </p>
+              </div>
+
+              <iframe
+                src={fullscreenVideo.videoUrl}
+                className="w-full h-full absolute inset-0 border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                title={fullscreenVideo.title}
+              />
+            </div>
+
+            {/* Audio watermark / security controls info */}
+            <div className="absolute bottom-4 right-4 text-[9px] text-slate-500 font-mono select-none pointer-events-none">
+              IP Security Monitored • AI Clipzone Nepal
+            </div>
+          </div>
+
+          {/* Fullscreen Sidebar Playlist */}
+          <div className="w-full md:w-80 bg-slate-950 border-t md:border-t-0 md:border-l border-slate-900 flex flex-col p-4 text-left font-sans h-[250px] md:h-full">
+            <div className="pb-2 border-b border-slate-900 mb-3">
+              <h5 className="text-xs font-black uppercase tracking-wider text-purple-400">
+                📚 Full Playlist ({fullscreenVideo.playlist.length} Lectures)
+              </h5>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+              {fullscreenVideo.playlist.map((video, idx) => {
+                const isPlaying = fullscreenVideo.idx === idx;
+                const videoYtId = getYouTubeIdGlobal(video.videoUrl);
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      const securePlayUrl = videoYtId
+                        ? `https://www.youtube-nocookie.com/embed/${videoYtId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3`
+                        : video.videoUrl;
+                      setFullscreenVideo({
+                        ...fullscreenVideo,
+                        title: video.title,
+                        videoUrl: securePlayUrl,
+                        idx: idx,
+                      });
+                      showToast(`Playing Lecture ${idx + 1}`, 'info');
+                    }}
+                    className={`p-3 rounded-xl border transition cursor-pointer flex items-start gap-3 text-xs ${
+                      isPlaying
+                        ? 'bg-purple-900/40 border-purple-500/50 text-purple-200 shadow-md shadow-purple-950/25'
+                        : 'bg-slate-900 hover:bg-slate-800 border-slate-950 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-lg border flex items-center justify-center font-black shrink-0 text-[9px] ${
+                      isPlaying
+                        ? 'bg-purple-600 text-white border-purple-400'
+                        : 'bg-slate-950 text-slate-400 border-slate-800'
+                    }`}>
+                      {idx + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`font-bold line-clamp-2 leading-tight ${isPlaying ? 'text-white' : ''}`}>
+                        {video.title}
+                      </p>
+                      <span className="text-[9px] text-slate-500 font-mono mt-1 block">⏳ {video.duration} mins</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

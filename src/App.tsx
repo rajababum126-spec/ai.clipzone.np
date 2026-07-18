@@ -90,6 +90,21 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+function cleanUndefined<T extends object>(obj: T): T {
+  const clean: any = {};
+  Object.keys(obj).forEach(key => {
+    const val = (obj as any)[key];
+    if (val !== undefined) {
+      if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+        clean[key] = cleanUndefined(val);
+      } else {
+        clean[key] = val;
+      }
+    }
+  });
+  return clean;
+}
+
 export default function App() {
   // Admin Mode states
   const [showAdminMenu, setShowAdminMenu] = useState(false);
@@ -347,7 +362,7 @@ export default function App() {
 
     const currentOrder = editingCourse && typeof editingCourse.order === 'number' ? editingCourse.order : courses.length;
 
-    const updatedCourse: Course = {
+        const updatedCourse: Course = {
       id: finalId,
       title: formTitle,
       price: formPrice,
@@ -361,8 +376,10 @@ export default function App() {
       videos: formVideos.length > 0 ? formVideos : [{ title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]
     };
 
+    const cleanedCourse = cleanUndefined(updatedCourse);
+
     try {
-      await setDoc(doc(db, 'courses', finalId), updatedCourse);
+      await setDoc(doc(db, 'courses', finalId), cleanedCourse);
       
       setCourses(prev => {
         const index = prev.findIndex(c => c.id === finalId);

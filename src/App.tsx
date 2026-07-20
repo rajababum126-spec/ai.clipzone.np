@@ -35,7 +35,8 @@ import {
   ArrowDown,
   QrCode,
   Home,
-  Menu
+  Menu,
+  ArrowRight
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -626,6 +627,7 @@ export default function App() {
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
   const [showAllCoursesAnyway, setShowAllCoursesAnyway] = useState(false);
   const [currentView, setCurrentView] = useState<'home' | 'classroom'>('home');
+  const [selectedClassroomCourseId, setSelectedClassroomCourseId] = useState<string | null>(null);
   const [fullscreenVideo, setFullscreenVideo] = useState<{
     courseTitle: string;
     title: string;
@@ -1337,155 +1339,152 @@ export default function App() {
 
         {/* Course Catalog Title & Grid Section */}
         <section id="courses-section" className="pt-10 scroll-mt-24">
-          <div className="text-center mb-12">
-            <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-2">
-              <BookOpen className="w-7 h-7 text-purple-600" />
-              Our Premium AI Courses
-            </h3>
-            <div className="w-24 h-1.5 bg-amber-500 mx-auto rounded-full mt-3"></div>
-            <p className="text-slate-500 mt-3 text-sm md:text-base">
-              तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
-            </p>
-          </div>
+          {currentView === 'home' && (
+            <div className="text-center mb-12">
+              <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-2">
+                <BookOpen className="w-7 h-7 text-purple-600" />
+                Our Premium AI Courses
+              </h3>
+              <div className="w-24 h-1.5 bg-amber-500 mx-auto rounded-full mt-3"></div>
+              <p className="text-slate-500 mt-3 text-sm md:text-base">
+                तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
+              </p>
+            </div>
+          )}
 
           {/* Courses Cards Grid or Live Embedded Classroom */}
           {currentView === 'classroom' ? (
             activeCourseIds.length > 0 ? (
-              <div className="space-y-12 text-left">
-                {/* Clean, minimal header instruction instead of a massive card */}
-                <div className="text-center max-w-xl mx-auto pb-4">
-                  <span className="text-3xl">🎯</span>
-                  <h4 className="text-lg font-extrabold text-slate-900 mt-2">Choose a Video to Start Learning</h4>
-                  <p className="text-xs text-slate-500 mt-1 font-semibold leading-relaxed">
-                    प्लेलिस्टको कुनै पनि भिडियोमा क्लिक गरी सिधै Full Screen मा हेरेर सिक्न सुरु गर्नुहोस्!
-                  </p>
-                </div>
+              <div className="space-y-8 text-left">
+                {/* Active Courses Tab bar/Switcher - rendered only if user has multiple active courses */}
+                {(() => {
+                  const activeCourses = courses.filter(course => activeCourseIds.includes(course.id));
+                  const currentClassroomCourse = activeCourses.find(c => c.id === selectedClassroomCourseId) || activeCourses[0];
+                  
+                  if (!currentClassroomCourse) return null;
 
-                <div className="space-y-12">
-                  {courses
-                    .filter(course => activeCourseIds.includes(course.id))
-                    .map((course) => {
-                      const activePlaylist = course.videos && course.videos.length > 0
-                        ? course.videos
-                        : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
+                  const activePlaylist = currentClassroomCourse.videos && currentClassroomCourse.videos.length > 0
+                    ? currentClassroomCourse.videos
+                    : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
 
-                      return (
-                        <motion.div
-                          key={course.id}
-                          initial={{ opacity: 0, y: 30 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="bg-slate-950 border border-slate-800 text-white rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden"
-                        >
-                          {/* Course Header Banner */}
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
-                            <div className="space-y-2 text-left">
-                              <div className="flex items-center gap-2">
-                                <span className="bg-purple-500/20 text-purple-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-purple-500/30">
-                                  🟢 Activated Course
-                                </span>
-                                <span className="text-xs text-slate-400 font-bold">({activePlaylist.length} Lectures)</span>
-                              </div>
-                              <h4 className="text-xl md:text-3xl font-black text-white tracking-tight leading-tight">
-                                {course.title}
-                              </h4>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              {isAdminActivated && (
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleEditCourseClick(course)}
-                                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                  >
-                                    ✏️ Edit Playlist & Videos
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteCourse(course.id)}
-                                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                  >
-                                    🗑️ Delete
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Beautiful Playlist Cards Grid for Direct Fullscreen Launch */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-8">
-                            {activePlaylist.map((video, idx) => {
-                              const ytId = getYouTubeIdGlobal(video.videoUrl);
-                              const videoThumbnail = ytId
-                                ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`
-                                : course.image;
-
+                  return (
+                    <div className="space-y-8">
+                      {activeCourses.length > 1 && (
+                        <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex flex-col md:flex-row items-center gap-4 justify-between">
+                          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider font-sans">
+                            📚 Switch Course Program:
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {activeCourses.map((course) => {
+                              const isActive = course.id === currentClassroomCourse.id;
                               return (
-                                <motion.div
-                                  key={idx}
-                                  whileHover={{ y: -6, scale: 1.02 }}
+                                <button
+                                  key={course.id}
                                   onClick={() => {
-                                    const securePlayUrl = ytId
-                                      ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3`
-                                      : video.videoUrl;
-                                    setFullscreenVideo({
-                                      courseTitle: course.title,
-                                      title: video.title,
-                                      videoUrl: securePlayUrl,
-                                      idx: idx,
-                                      playlist: activePlaylist,
-                                      courseId: course.id,
-                                    });
-                                    showToast(`Opening "${video.title}" in Fullscreen! 🎥`, 'success');
+                                    setSelectedClassroomCourseId(course.id);
+                                    showToast(`Loaded: ${course.title}`, 'info');
                                   }}
-                                  className="group bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden cursor-pointer hover:border-purple-500/60 transition-all duration-300 flex flex-col h-full relative"
+                                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                                    isActive
+                                      ? 'bg-purple-700 text-white shadow-md'
+                                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                                  }`}
                                 >
-                                  {/* Video Thumbnail with Play Badge */}
-                                  <div className="relative aspect-video w-full bg-slate-950 overflow-hidden">
-                                    <img
-                                      src={videoThumbnail}
-                                      alt={video.title}
-                                      referrerPolicy="no-referrer"
-                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                    />
-
-                                    {/* Glassy Play Icon Overlay */}
-                                    <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/65 transition-colors duration-300 flex items-center justify-center">
-                                      <div className="w-12 h-12 rounded-full bg-purple-600/90 hover:bg-purple-600 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-all duration-300">
-                                        <Play className="w-5 h-5 fill-white ml-0.5" />
-                                      </div>
-                                    </div>
-
-                                    {/* Top-Left Lecture Badge */}
-                                    <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-lg border border-slate-800/60">
-                                      <span className="text-[10px] text-purple-300 font-mono font-black">
-                                        Lecture {idx + 1}
-                                      </span>
-                                    </div>
-
-                                    {/* Bottom-Right Duration Badge */}
-                                    <div className="absolute bottom-3 right-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-0.5 rounded-lg border border-slate-800/60">
-                                      <span className="text-[10px] text-slate-300 font-mono font-semibold">
-                                        ⏳ {video.duration} mins
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* Text Info */}
-                                  <div className="p-4 flex flex-col justify-between grow text-left space-y-2">
-                                    <h5 className="text-sm font-extrabold text-white group-hover:text-purple-400 transition-colors line-clamp-2 leading-snug">
-                                      {video.title}
-                                    </h5>
-                                    <span className="text-[10px] text-purple-400 font-black uppercase tracking-wider block">
-                                      Watch in Fullscreen ⚡
-                                    </span>
-                                  </div>
-                                </motion.div>
+                                  {course.title}
+                                </button>
                               );
                             })}
                           </div>
-                        </motion.div>
-                      );
-                    })}
-                </div>
+                        </div>
+                      )}
+
+                      {/* Single Selected Course Section ONLY */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 md:p-10 shadow-xl relative overflow-hidden text-slate-900"
+                      >
+                        {/* Course Header Banner */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                          <div className="space-y-2 text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-purple-50 text-purple-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-purple-100 font-sans">
+                                🟢 Active Program
+                              </span>
+                              <span className="text-xs text-slate-400 font-bold font-sans">({activePlaylist.length} Total Lectures)</span>
+                            </div>
+                            <h4 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-tight font-sans">
+                              {currentClassroomCourse.title}
+                            </h4>
+                            <p className="text-xs text-slate-500 font-medium font-sans">
+                              कुनै पनि भिडियोमा क्लिक गरी सिधै Full Screen मा हेरेर सिक्न सुरु गर्नुहोस्!
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isAdminActivated && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditCourseClick(currentClassroomCourse)}
+                                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans"
+                                >
+                                  ✏️ Edit Playlist & Videos
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCourse(currentClassroomCourse.id)}
+                                  className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer font-sans"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Beautiful Vertical Playlist Layout (Matches classic clean uploaded playlist visual) */}
+                        <div className="space-y-3 mt-8">
+                          {activePlaylist.map((video, idx) => {
+                            const ytId = getYouTubeIdGlobal(video.videoUrl);
+
+                            return (
+                              <motion.div
+                                key={idx}
+                                whileHover={{ scale: 1.005, x: 2 }}
+                                onClick={() => {
+                                  const securePlayUrl = ytId
+                                    ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3`
+                                    : video.videoUrl;
+                                  setFullscreenVideo({
+                                    courseTitle: currentClassroomCourse.title,
+                                    title: video.title,
+                                    videoUrl: securePlayUrl,
+                                    idx: idx,
+                                    playlist: activePlaylist,
+                                    courseId: currentClassroomCourse.id,
+                                  });
+                                  showToast(`Opening Lecture ${idx + 1} in Fullscreen! 🎥`, 'success');
+                                }}
+                                className="group bg-white hover:bg-slate-50/70 border border-slate-100 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-4 text-left"
+                              >
+                                {/* Left: Elegant pastel pink play icon box matching the screenshot */}
+                                <div className="w-11 h-11 sm:w-12 sm:h-12 bg-[#FDF2F2] border border-[#FDE8E8]/40 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                  <Play className="w-4 h-4 text-[#E02424] fill-[#E02424] ml-0.5" />
+                                </div>
+
+                                {/* Right: Text Info */}
+                                <div className="flex-1 min-w-0">
+                                  <h5 className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-purple-700 transition-colors leading-snug font-sans">
+                                    {video.title}
+                                  </h5>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    </div>
+                  );
+                })()}
 
               {/* Dynamic Course Creator add-on for Admin directly under active listing */}
               {isAdminActivated && (
@@ -1627,6 +1626,7 @@ export default function App() {
                       {activeCourseIds.includes(course.id) ? (
                         <button 
                           onClick={() => {
+                            setSelectedClassroomCourseId(course.id);
                             setCurrentView('classroom');
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                             showToast(`Opening "${course.title}" Playlist! 🎥`, 'info');
@@ -1709,7 +1709,8 @@ export default function App() {
         </section>
 
         {/* Testimonials, FAQs, and contact form sequential flows */}
-        <div className="space-y-20 animate-in fade-in duration-300">
+        {currentView === 'home' && (
+          <div className="space-y-20 animate-in fade-in duration-300">
 
         {/* Testimonial slider / carousel - ADVANCED BENTO FEEDBOARD */}
         <section className="mt-20">
@@ -2311,6 +2312,7 @@ export default function App() {
           </div>
         </section>
           </div>
+        )}
 
       </main>
 

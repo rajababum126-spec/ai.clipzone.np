@@ -43,6 +43,10 @@
           "type": "string",
           "description": "The unique code like AI45NP"
         },
+        "activeDeviceId": {
+          "type": "string",
+          "description": "The ID of the device currently active with this code for single-device restriction"
+        },
         "status": {
           "type": "string",
           "enum": ["unused", "used"],

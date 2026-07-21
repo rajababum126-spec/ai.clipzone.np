@@ -36,7 +36,8 @@ import {
   QrCode,
   Home,
   Menu,
-  ArrowRight
+  ArrowRight,
+  RotateCw
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -123,6 +124,18 @@ export default function App() {
     return localStorage.getItem('clipzone_admin_activated') === 'true';
   });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+
+  // Student Authentication & Course Activation states
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userActivationKeys, setUserActivationKeys] = useState<any[]>([]);
+  const [activeCourseIds, setActiveCourseIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Dynamic Courses state
   const [courses, setCourses] = useState<Course[]>(() => {
@@ -212,6 +225,15 @@ export default function App() {
     fetchCourses();
   }, []);
 
+  const getOrCreateDeviceId = () => {
+    let devId = localStorage.getItem('clipzone_device_id');
+    if (!devId) {
+      devId = 'dev_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now().toString(36);
+      localStorage.setItem('clipzone_device_id', devId);
+    }
+    return devId;
+  };
+
   const getOrCreateLocalUser = (displayName: string) => {
     let uid = localStorage.getItem('clipzone_student_uid');
     if (!uid) {
@@ -224,6 +246,54 @@ export default function App() {
       isAnonymous: true,
       email: null
     };
+  };
+
+  // Check active device sessions to enforce single device login
+  const checkActiveDeviceSessions = async () => {
+    const deviceId = getOrCreateDeviceId();
+    try {
+      const activeCodesStr = localStorage.getItem('clipzone_active_codes');
+      if (!activeCodesStr) return;
+      const activeCodes: string[] = JSON.parse(activeCodesStr);
+      if (activeCodes.length === 0) return;
+
+      const updatedActiveCodes: string[] = [];
+      const updatedCourseIds: string[] = [];
+      let sessionTerminated = false;
+      let terminatedCode = '';
+
+      for (const code of activeCodes) {
+        const keyDocSnap = await getDoc(doc(db, 'activation_keys', code));
+        if (keyDocSnap.exists()) {
+          const keyData = keyDocSnap.data();
+          if (keyData.activeDeviceId === deviceId) {
+            updatedActiveCodes.push(code);
+            if (keyData.courseId) {
+              updatedCourseIds.push(keyData.courseId);
+            }
+          } else {
+            sessionTerminated = true;
+            terminatedCode = code;
+          }
+        } else {
+          sessionTerminated = true;
+          terminatedCode = code;
+        }
+      }
+
+      if (sessionTerminated) {
+        localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedActiveCodes));
+        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourseIds));
+        setActiveCourseIds(updatedCourseIds);
+        showToast(`यो डिभाइसको सेसन समाप्त भयो! कोड ${terminatedCode} अर्को डिभाइसमा एक्टिभ गरिएको छ। (Session ended! Code ${terminatedCode} has been logged in on another device.)`, 'error');
+        
+        if (currentUser && currentUser.uid && !currentUser.uid.startsWith('local_')) {
+          await fetchUserActiveKeys(currentUser);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking active device sessions:', err);
+    }
   };
 
   // Firebase Authentication Observer & User Keys Fetcher
@@ -252,9 +322,61 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Periodic device session check to handle real-time single device enforcement
+  useEffect(() => {
+    checkActiveDeviceSessions();
+    const interval = setInterval(() => {
+      checkActiveDeviceSessions();
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   // Fetch student's keys
+  // Prevent context-menu, copy events and keyboard inspector shortcuts for security/copy protection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U, Ctrl+S
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+      
+      if (
+        e.key === 'F12' ||
+        (e.shiftKey && cmdOrCtrl && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+        (cmdOrCtrl && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
+      ) {
+        if (!isAdminActivated) {
+          e.preventDefault();
+          showToast('सुरक्षाको कारणले यो सर्टकट असक्षम गरिएको छ! (Shortcut disabled for protection!)', 'error');
+        }
+      }
+    };
+    
+    const handleContextMenu = (e: MouseEvent) => {
+      if (!isAdminActivated) {
+        e.preventDefault();
+      }
+    };
+
+    const handleCopy = (e: ClipboardEvent) => {
+      if (!isAdminActivated) {
+        e.preventDefault();
+        showToast('कपी गर्न निषेध गरिएको छ! (Copying is restricted!)', 'error');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('copy', handleCopy as any);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('copy', handleCopy as any);
+    };
+  }, [isAdminActivated]);
+
   const fetchUserActiveKeys = async (user: FirebaseUser) => {
     try {
+      const deviceId = getOrCreateDeviceId();
       const q = query(
         collection(db, 'activation_keys'),
         where('claimedByUid', '==', user.uid),
@@ -265,9 +387,12 @@ export default function App() {
       const activeIds: string[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        keys.push({ id: doc.id, ...data });
-        if (data.courseId) {
-          activeIds.push(data.courseId);
+        // ONLY count as active on this device if activeDeviceId matches!
+        if (data.activeDeviceId === deviceId) {
+          keys.push({ id: doc.id, ...data });
+          if (data.courseId) {
+            activeIds.push(data.courseId);
+          }
         }
       });
 
@@ -373,6 +498,25 @@ export default function App() {
 
   const handleStudentLogout = async () => {
     try {
+      const activeCodesStr = localStorage.getItem('clipzone_active_codes');
+      if (activeCodesStr) {
+        const activeCodes: string[] = JSON.parse(activeCodesStr);
+        for (const code of activeCodes) {
+          try {
+            await updateDoc(doc(db, 'activation_keys', code), {
+              activeDeviceId: '',
+              claimedByUid: ''
+            });
+          } catch (err) {
+            console.error(`Failed to release code ${code} during logout:`, err);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error releasing activation codes during logout:', err);
+    }
+
+    try {
       await signOut(auth);
     } catch (err) {
       console.warn('Sign out from Firebase failed, continuing local logout:', err);
@@ -380,10 +524,52 @@ export default function App() {
     localStorage.removeItem('clipzone_student_name');
     localStorage.removeItem('clipzone_student_uid');
     localStorage.removeItem('clipzone_local_activated_courses');
+    localStorage.removeItem('clipzone_active_codes');
     setCurrentUser(null);
     setUserActivationKeys([]);
     setActiveCourseIds([]);
-    showToast('Logged out of Student Portal successfully!', 'info');
+    showToast('Student Portal र सबै कोर्स लगआउट गरियो! (Logged out of all courses successfully!)', 'info');
+  };
+
+  const handleReleaseCourseCode = async (courseId: string) => {
+    const deviceId = getOrCreateDeviceId();
+    try {
+      const activeCodesStr = localStorage.getItem('clipzone_active_codes') || '[]';
+      const activeCodes: string[] = JSON.parse(activeCodesStr);
+      let releasedCode = '';
+
+      for (const code of activeCodes) {
+        const keyDocSnap = await getDoc(doc(db, 'activation_keys', code));
+        if (keyDocSnap.exists()) {
+          const keyData = keyDocSnap.data();
+          if (keyData.courseId === courseId && keyData.activeDeviceId === deviceId) {
+            releasedCode = code;
+            await updateDoc(doc(db, 'activation_keys', code), {
+              activeDeviceId: '',
+              claimedByUid: ''
+            });
+            break;
+          }
+        }
+      }
+
+      const updatedCodes = activeCodes.filter(c => c !== releasedCode);
+      localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedCodes));
+
+      const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      const updatedCourses = localActivated.filter((id: string) => id !== courseId);
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourses));
+      setActiveCourseIds(updatedCourses);
+
+      if (currentUser && currentUser.uid && !currentUser.uid.startsWith('local_')) {
+        await fetchUserActiveKeys(currentUser);
+      }
+
+      showToast('कोर्स डिभाइस लगआउट गरियो! अब यो कोड अरु डिभाइसमा प्रयोग गर्न सकिन्छ। (Course logged out from device successfully! This code is now free.)', 'success');
+    } catch (err) {
+      console.error('Error releasing course code:', err);
+      showToast('Failed to release course code.', 'error');
+    }
   };
 
   // ACTIVATE / CLAIM SECRET KEY
@@ -427,6 +613,8 @@ export default function App() {
         }
       }
 
+      const deviceId = getOrCreateDeviceId();
+
       // Look up key in Firestore
       let keyData: any = null;
       let keyDocRef = null;
@@ -447,9 +635,10 @@ export default function App() {
         firestoreError = true;
       }
 
-      // If Firestore key was loaded and is already claimed, block
-      if (keyData && keyData.status === 'used') {
-        showToast('This activation code has already been used!', 'error');
+      // Single-device login check:
+      // If code is already claimed and has an activeDeviceId that is NOT ours, block it!
+      if (keyData && keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
+        showToast('यो कोड पहिले नै अर्को डिभाइसमा एक्टिभ छ! कृपया पहिले त्यहाँबाट लगआउट गर्नुहोस्। (This code is already active on another device! Please log out from that device first.)', 'error');
         setIsActivating(false);
         return;
       }
@@ -475,6 +664,7 @@ export default function App() {
         try {
           await updateDoc(keyDocRef, {
             status: 'used',
+            activeDeviceId: deviceId,
             claimedByEmail: studentName,
             claimedByUid: activeUser?.uid || 'local_student',
             claimedAt: Date.now(),
@@ -493,7 +683,14 @@ export default function App() {
         setActiveCourseIds(localActivated);
       }
 
-      showToast(`Success! Unlocked: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
+      // Save the active code locally for periodic verification and release
+      const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+      if (!activeCodes.includes(cleanCode)) {
+        activeCodes.push(cleanCode);
+        localStorage.setItem('clipzone_active_codes', JSON.stringify(activeCodes));
+      }
+
+      showToast(`सफलतापूर्वक अनलक भयो: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
       setActivationCodeInput('');
       
       // Refresh user's key list if they are a real Firebase user
@@ -610,17 +807,7 @@ export default function App() {
   // Canvas ref for FonePay QR
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Student Authentication & Course Activation states
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [userActivationKeys, setUserActivationKeys] = useState<any[]>([]);
-  const [activeCourseIds, setActiveCourseIds] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-    } catch (e) {
-      return [];
-    }
-  });
+
   const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
   const [activationCodeInput, setActivationCodeInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
@@ -636,6 +823,14 @@ export default function App() {
     playlist: { title: string; duration: string; videoUrl: string }[];
     courseId: string;
   } | null>(null);
+  const [videoRotation, setVideoRotation] = useState<number>(0);
+
+  // Reset video rotation when the fullscreen video modal is closed
+  useEffect(() => {
+    if (!fullscreenVideo) {
+      setVideoRotation(0);
+    }
+  }, [fullscreenVideo]);
 
   // Auth Form Fields
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -1452,7 +1647,7 @@ export default function App() {
                                 whileHover={{ scale: 1.005, x: 2 }}
                                 onClick={() => {
                                   const securePlayUrl = ytId
-                                    ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3`
+                                    ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3`
                                     : video.videoUrl;
                                   setFullscreenVideo({
                                     courseTitle: currentClassroomCourse.title,
@@ -2409,6 +2604,20 @@ export default function App() {
                       className="absolute inset-0 z-50 pointer-events-none"
                     />
 
+                    {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
+                    <div 
+                      className="absolute top-0 inset-x-0 h-14 bg-transparent z-45 cursor-default" 
+                      title="Secure Player Header" 
+                      onContextMenu={(e) => e.preventDefault()}
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                    />
+                    <div 
+                      className="absolute bottom-0 right-0 w-36 h-12 bg-transparent z-45 cursor-default" 
+                      title="Secure Player Branding Block" 
+                      onContextMenu={(e) => e.preventDefault()}
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                    />
+
                     {/* Watermark to discourage screen records */}
                     <div className="absolute bottom-3 left-4 z-40 bg-slate-950/60 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-slate-800 pointer-events-none select-none">
                       <p className="text-[10px] text-slate-400 font-mono font-bold flex items-center gap-1.5">
@@ -2435,7 +2644,7 @@ export default function App() {
 
                       const ytId = getYouTubeId(currentLecture.videoUrl);
                       const secureEmbedSrc = ytId 
-                        ? `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3&disablekb=1&autoplay=0`
+                        ? `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3&disablekb=1&autoplay=0`
                         : currentLecture.videoUrl;
 
                       return (
@@ -2460,6 +2669,32 @@ export default function App() {
                     <p className="text-xs text-slate-400 font-medium flex items-center gap-2">
                       ⏳ Duration: {((selectedCourse.videos && selectedCourse.videos.length > 0 ? selectedCourse.videos : [{ duration: '12:15' }])[currentVideoIndex] || { duration: '12:00' }).duration} minutes
                     </p>
+                    
+                    <button
+                      onClick={() => {
+                        const list = selectedCourse.videos && selectedCourse.videos.length > 0 
+                          ? selectedCourse.videos 
+                          : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: '' }];
+                        const currentLecture = list[currentVideoIndex] || list[0];
+                        const ytId = getYouTubeIdGlobal(currentLecture.videoUrl);
+                        const securePlayUrl = ytId
+                          ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3`
+                          : currentLecture.videoUrl;
+
+                        setFullscreenVideo({
+                          courseTitle: selectedCourse.title,
+                          title: currentLecture.title,
+                          videoUrl: securePlayUrl,
+                          idx: currentVideoIndex,
+                          playlist: list,
+                          courseId: selectedCourse.id,
+                        });
+                        showToast(`भिडियोलाई इमर्सिभ फुलस्क्रिनमा खोलिँदैछ! 🎥`, 'success');
+                      }}
+                      className="mt-3 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer w-fit"
+                    >
+                      📺 Expand to Fullscreen (सुरक्षित प्लेयर)
+                    </button>
                   </div>
                 </div>
 
@@ -2740,9 +2975,23 @@ export default function App() {
                                   </p>
                                 </div>
                               </div>
-                              <span className="text-[10px] font-bold text-purple-700 hover:underline shrink-0">
-                                Watch →
-                              </span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm(`Are you sure you want to log out from "${course.title}" on this device? This will release the activation key for other devices.`)) {
+                                      handleReleaseCourseCode(course.id);
+                                    }
+                                  }}
+                                  className="text-[9px] font-black uppercase text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-lg transition"
+                                  title="Log out of this course to use its code on another device"
+                                >
+                                  Release 🔓
+                                </button>
+                                <span className="text-[10px] font-bold text-purple-700 hover:underline">
+                                  Watch →
+                                </span>
+                              </div>
                             </div>
                           ))}
                       </div>
@@ -3139,6 +3388,13 @@ export default function App() {
                                   <div className="text-[9px] font-medium text-slate-400 space-y-0.5">
                                     <p className="truncate">Claimed: <span className="font-bold text-slate-500">{key.claimedByEmail}</span></p>
                                     <p>Claimed At: <span className="font-bold">{new Date(key.claimedAt || 0).toLocaleDateString()}</span></p>
+                                    <p className="flex items-center gap-1 font-semibold">
+                                      Session: {key.activeDeviceId ? (
+                                        <span className="text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded font-black text-[8px] uppercase">🟢 Active Device</span>
+                                      ) : (
+                                        <span className="text-slate-500 bg-slate-100 px-1 py-0.2 rounded font-black text-[8px] uppercase">⚪ Logged Out</span>
+                                      )}
+                                    </p>
                                   </div>
                                 )}
                               </div>
@@ -3626,24 +3882,113 @@ export default function App() {
                   {fullscreenVideo.title} (Lecture {fullscreenVideo.idx + 1})
                 </h4>
               </div>
-              <button
-                onClick={() => {
-                  setFullscreenVideo(null);
-                }}
-                className="bg-slate-900/80 hover:bg-rose-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1 font-sans shadow-lg"
-              >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">Exit Fullscreen</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setVideoRotation((prev) => (prev + 90) % 360);
+                    showToast('भिडियो घुमाइयो! (Video rotated!)', 'success');
+                  }}
+                  className="bg-slate-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg"
+                  title="Rotate Screen"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>घुमाउनुहोस् (Rotate)</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setFullscreenVideo(null);
+                  }}
+                  className="bg-slate-900/80 hover:bg-rose-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1 font-sans shadow-lg"
+                >
+                  <X className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exit Fullscreen</span>
+                </button>
+              </div>
             </div>
 
-            {/* Embed Video Iframe */}
-            <div className="relative w-full aspect-video max-h-full bg-black overflow-hidden flex items-center justify-center">
+            {/* Embed Video Iframe with Advanced CSS Rotation Support */}
+            <div 
+              className={`bg-black flex items-center justify-center transition-all duration-300 ${
+                (videoRotation === 90 || videoRotation === 270) 
+                  ? 'fixed inset-0 z-50 w-[100vh] h-[100vw]' 
+                  : 'relative w-full aspect-video max-h-full overflow-hidden'
+              }`}
+              style={{
+                width: (videoRotation === 90 || videoRotation === 270) ? '100vh' : '100%',
+                height: (videoRotation === 90 || videoRotation === 270) ? '100vw' : undefined,
+                maxWidth: (videoRotation === 90 || videoRotation === 270) ? '100vh' : '100%',
+                maxHeight: (videoRotation === 90 || videoRotation === 270) ? '100vw' : '100%',
+                left: (videoRotation === 90 || videoRotation === 270) ? '50%' : undefined,
+                top: (videoRotation === 90 || videoRotation === 270) ? '50%' : undefined,
+                transform: (videoRotation === 90 || videoRotation === 270) 
+                  ? `translate(-50%, -50%) rotate(${videoRotation}deg)` 
+                  : (videoRotation === 180 ? 'rotate(180deg)' : 'none'),
+                transformOrigin: 'center center',
+              }}
+            >
               {/* Context guard to prevent direct saving */}
               <div 
                 onContextMenu={(e) => e.preventDefault()}
                 className="absolute inset-0 z-50 pointer-events-none"
               />
+
+              {/* Elegant Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
+              <div 
+                className="absolute top-0 inset-x-0 h-16 bg-transparent z-45 cursor-default" 
+                title="Secure Player Header" 
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              />
+              <div 
+                className="absolute bottom-0 right-0 w-44 h-14 bg-transparent z-45 cursor-default" 
+                title="Secure Player Branding Block" 
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              />
+
+              {/* High-visibility Floating Rotate and Reset Bar inside the Video area itself */}
+              <div className="absolute top-4 right-4 z-[60] flex items-center gap-1.5">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVideoRotation((prev) => (prev + 90) % 360);
+                    showToast('भिडियो घुमाइयो! (Video rotated!)', 'success');
+                  }}
+                  className="bg-slate-950/90 hover:bg-purple-600 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
+                  title="Rotate Video"
+                >
+                  <RotateCw className="w-3 h-3 animate-spin-slow" />
+                  <span>🔄 Rotate ({videoRotation}°)</span>
+                </button>
+                
+                {(videoRotation === 90 || videoRotation === 180 || videoRotation === 270) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setVideoRotation(0);
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
+                    title="Reset to Normal"
+                  >
+                    Reset ↩️
+                  </button>
+                )}
+
+                {(videoRotation === 90 || videoRotation === 270) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setVideoRotation(0);
+                      setFullscreenVideo(null);
+                    }}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
+                    title="Exit player"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Exit</span>
+                  </button>
+                )}
+              </div>
 
               {/* Watermark in fullscreen */}
               <div className="absolute bottom-6 left-6 z-40 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-purple-500/20 pointer-events-none select-none shadow-lg">
@@ -3686,7 +4031,7 @@ export default function App() {
                     key={idx}
                     onClick={() => {
                       const securePlayUrl = videoYtId
-                        ? `https://www.youtube-nocookie.com/embed/${videoYtId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3`
+                        ? `https://www.youtube-nocookie.com/embed/${videoYtId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3`
                         : video.videoUrl;
                       setFullscreenVideo({
                         ...fullscreenVideo,

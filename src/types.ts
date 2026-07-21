@@ -62,5 +62,6 @@ export interface ActivationKey {
   expiresAt?: number;
   courseId?: string; // "all" or specific courseId e.g. "ai-masterclass"
   courseTitle?: string; // "All Courses" or specific course name
+  activeDeviceId?: string;
 }
 

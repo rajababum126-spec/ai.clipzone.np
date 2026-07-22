@@ -37,7 +37,10 @@ import {
   Home,
   Menu,
   ArrowRight,
-  RotateCw
+  RotateCw,
+  Download,
+  Smartphone,
+  Share2
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -832,6 +835,53 @@ export default function App() {
     }
   }, [fullscreenVideo]);
 
+  // Web App / PWA Install States
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
+  const [activeInstallTab, setActiveInstallTab] = useState<'android' | 'ios' | 'desktop'>('android');
+
+  // Detect PWA install prompt & standalone status
+  useEffect(() => {
+    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
+      setIsAppInstalled(true);
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    const handleAppInstalled = () => {
+      setIsAppInstalled(true);
+      setDeferredPrompt(null);
+      showToast('AI Clipzone Nepal Web App सफलतापूर्वक इन्स्टल गरियो! 📱🎉', 'success');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallAppClick = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
+        if (choiceResult.outcome === 'accepted') {
+          showToast('इन्स्टल प्रक्रिया सुरु भयो! 🚀', 'success');
+          setIsAppInstalled(true);
+        }
+        setDeferredPrompt(null);
+      });
+    } else {
+      setShowInstallModal(true);
+    }
+  };
+
   // Auth Form Fields
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authEmail, setAuthEmail] = useState('');
@@ -1483,6 +1533,22 @@ export default function App() {
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
                     >
                       👤 Profile Page
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        handleInstallAppClick();
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-amber-500/10 hover:from-amber-500/30 hover:to-purple-500/30 text-amber-300 transition flex items-center justify-between gap-2 cursor-pointer border border-amber-500/30 shadow-sm mt-0.5"
+                    >
+                      <div className="flex items-center gap-2 font-bold">
+                        <Smartphone className="w-4 h-4 text-amber-400" />
+                        <span>📲 Install Web App</span>
+                      </div>
+                      <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                        APP
+                      </span>
                     </button>
                   </motion.div>
                 )}
@@ -3018,6 +3084,176 @@ export default function App() {
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition mt-6 cursor-pointer"
               >
                 Close Portal
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* WEB APP INSTALLATION MODAL */}
+      <AnimatePresence>
+        {showInstallModal && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowInstallModal(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white max-w-lg w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100 text-slate-800 max-h-[90vh] overflow-y-auto"
+            >
+              <button 
+                onClick={() => setShowInstallModal(false)}
+                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-purple-600 text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-purple-500/20 ring-4 ring-purple-100">
+                  <Smartphone className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
+                  AI Clipzone Web App Download 📱
+                </h3>
+                <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">
+                  वेबसाइटलाई आफ्नो मोबाइलमा Direct Web App को रूपमा इन्स्टल गर्नुहोस् र बिना कुनै झन्झट १-क्लिकमा कोर्षहरु अध्ययन गर्नुहोस्!
+                </p>
+              </div>
+
+              {/* Direct One-Tap Install Button if available */}
+              {deferredPrompt && (
+                <div className="mb-6 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 p-4 rounded-2xl border border-amber-500/30 text-center">
+                  <p className="text-xs font-black text-amber-800 mb-2">
+                    ⚡ तपाईंको ब्राउजरमा Direct One-Tap Install उपलब्ध छ!
+                  </p>
+                  <button
+                    onClick={() => {
+                      deferredPrompt.prompt();
+                      deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
+                        if (choiceResult.outcome === 'accepted') {
+                          showToast('इन्स्टल प्रक्रिया सुरु भयो! 📱🎉', 'success');
+                          setIsAppInstalled(true);
+                          setShowInstallModal(false);
+                        }
+                        setDeferredPrompt(null);
+                      });
+                    }}
+                    className="w-full bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-600 hover:to-purple-700 text-white font-extrabold py-3.5 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer active:scale-98"
+                  >
+                    <Download className="w-4 h-4 animate-bounce" />
+                    <span>Direct Install Web App 📲</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Platform Selector Tabs */}
+              <div className="flex bg-slate-100 p-1 rounded-2xl mb-5">
+                <button
+                  onClick={() => setActiveInstallTab('android')}
+                  className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeInstallTab === 'android'
+                      ? 'bg-white text-purple-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  🤖 Android
+                </button>
+                <button
+                  onClick={() => setActiveInstallTab('ios')}
+                  className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeInstallTab === 'ios'
+                      ? 'bg-white text-purple-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  🍎 iPhone (iOS)
+                </button>
+                <button
+                  onClick={() => setActiveInstallTab('desktop')}
+                  className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeInstallTab === 'desktop'
+                      ? 'bg-white text-purple-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  💻 Laptop / PC
+                </button>
+              </div>
+
+              {/* Instructions per Tab */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 mb-6 text-xs text-slate-700 space-y-3">
+                {activeInstallTab === 'android' && (
+                  <>
+                    <div className="font-extrabold text-slate-900 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
+                      <span>🤖 Android Phone मा App Install गर्ने तरिका:</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-2 font-medium leading-relaxed">
+                      <li>मोबाइलको <strong>Chrome / Brave</strong> ब्राउजरमा यो वेबसाइट खोल्नुहोस्।</li>
+                      <li>माथि दायाँ तर्फ रहेको <strong>३ वटा थोप्ला (⋮)</strong> मेनुमा थिच्नुहोस्।</li>
+                      <li>मेनुबाट <strong>"Install app"</strong> (वा <strong>"Add to Home screen"</strong>) विकल्प चयन गर्नुहोस्।</li>
+                      <li><strong>Install</strong> बटन थिच्नुहोस्। अब तपाईंको मोबाइलको Home Screen मा AI Clipzone App बस्नेछ!</li>
+                    </ol>
+                  </>
+                )}
+
+                {activeInstallTab === 'ios' && (
+                  <>
+                    <div className="font-extrabold text-slate-900 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
+                      <span>🍎 iPhone / iPad मा App Install गर्ने तरिका:</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-2 font-medium leading-relaxed">
+                      <li>आफ्नो iPhone मा <strong>Safari Browser</strong> मा यो वेबसाइट खोल्नुहोस्।</li>
+                      <li>तल रहेको <strong>Share (शेयर) बटन 📤</strong> मा थिच्नुहोस्।</li>
+                      <li>तल स्क्रोल गरी <strong>"Add to Home Screen"</strong> (होम स्क्रिनमा थप्नुहोस्) मा थिच्नुहोस्।</li>
+                      <li>माथि दायाँ तर्फको <strong>"Add"</strong> थिच्नुहोस्! अब एप iPhone को स्क्रीनमा तयार भयो।</li>
+                    </ol>
+                  </>
+                )}
+
+                {activeInstallTab === 'desktop' && (
+                  <>
+                    <div className="font-extrabold text-slate-900 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
+                      <span>💻 Laptop / Desktop मा App Install गर्ने तरिका:</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-2 font-medium leading-relaxed">
+                      <li><strong>Chrome वा Edge</strong> ब्राउजरको एड्रेस बारमा हेर्नुहोस्।</li>
+                      <li>दायाँ कुनामा रहेको <strong>Install App आयकन (📥)</strong> मा थिच्नुहोस्।</li>
+                      <li><strong>"Install AI Clipzone Nepal"</strong> मा क्लिक गर्नुहोस्! अब यो Desktop App को रूपमा छुट्टै विन्डोमा चल्नेछ।</li>
+                    </ol>
+                  </>
+                )}
+              </div>
+
+              {/* App Features List */}
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                <div className="bg-purple-50 p-2.5 rounded-xl border border-purple-100 flex items-center gap-2 text-[11px] font-bold text-purple-900">
+                  <span className="text-base">⚡</span> १-क्लिक मा सिधै खोल्न सकिने
+                </div>
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100 flex items-center gap-2 text-[11px] font-bold text-amber-900">
+                  <span className="text-base">🚀</span> Buffer-free HD Video Player
+                </div>
+                <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 flex items-center gap-2 text-[11px] font-bold text-emerald-900">
+                  <span className="text-base">🔒</span> सुरक्षित र गोप्य अध्ययन
+                </div>
+                <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-100 flex items-center gap-2 text-[11px] font-bold text-blue-900">
+                  <span className="text-base">🇳🇵</span> Nepal's #1 AI Course App
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowInstallModal(false)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer"
+              >
+                बुझेँ (Close Window)
               </button>
             </motion.div>
           </div>

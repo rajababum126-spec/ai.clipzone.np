@@ -866,11 +866,52 @@ export default function App() {
   }, []);
 
   const handleInstallAppClick = () => {
-    if (isAppInstalled) {
-      showToast('AI Clipzone App पहिले नै इन्स्टल भइसकेको छ! 📱✨', 'info');
-      return;
+    // 1. Trigger instant automatic Web App Launcher File Download
+    try {
+      const launcherHtml = `<!DOCTYPE html>
+<html lang="np">
+<head>
+  <meta charset="utf-8">
+  <title>AI Clipzone Nepal Web App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="${window.location.origin}/manifest.json">
+  <style>
+    body { background: #0f172a; color: #ffffff; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; padding: 20px; }
+    .card { background: #1e293b; padding: 30px; border-radius: 24px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); max-width: 400px; width: 100%; }
+    .btn { background: #9333ea; color: #fff; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 15px; }
+  </style>
+  <script>
+    setTimeout(function() {
+      window.location.href = "${window.location.origin}";
+    }, 500);
+  </script>
+</head>
+<body>
+  <div class="card">
+    <h2 style="margin-top:0;">🇳🇵 AI Clipzone Nepal</h2>
+    <p>Opening learning app portal...</p>
+    <a href="${window.location.origin}" class="btn">🚀 Open AI Clipzone Now</a>
+  </div>
+</body>
+</html>`;
+
+      const blob = new Blob([launcherHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'AI_Clipzone_Nepal_App.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.warn('Auto download error:', e);
     }
 
+    // 2. Trigger native PWA install prompt if supported/deferred by browser
     if (deferredPrompt) {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
@@ -881,13 +922,7 @@ export default function App() {
         setDeferredPrompt(null);
       });
     } else {
-      // Direct action fallback for devices/browsers where beforeinstallprompt event is not available or iOS
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-      if (isIOS) {
-        showToast("iPhone मा Share 📤 -> 'Add to Home Screen' थिच्नुहोस्!", 'info');
-      } else {
-        showToast("इन्स्टल गर्न मेनु (⋮) बाट 'Add to Home screen' वा 'Install app' थिच्नुहोस्! 📲", 'info');
-      }
+      showToast('इन्स्टल र App File डाउनलोड सुरु भयो! (Auto downloading!) 📲🎉', 'success');
     }
   };
 
@@ -3071,6 +3106,30 @@ export default function App() {
                           ))}
                       </div>
                     )}
+                  </div>
+
+                  {/* Install Web App Option in Profile */}
+                  <div className="bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 p-3.5 rounded-2xl border border-amber-500/30 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                        <Smartphone className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span>AI Clipzone Web App</span>
+                      </h4>
+                      <p className="text-[10px] font-semibold text-slate-500 mt-0.5 truncate">
+                        {isAppInstalled ? '✅ App installed on home screen' : 'Direct install as mobile app on your phone'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileModal(false);
+                        handleInstallAppClick();
+                      }}
+                      className="bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-600 hover:to-purple-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-3.5 py-2 rounded-xl transition cursor-pointer shadow-md shrink-0 flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{isAppInstalled ? 'Installed' : 'Install App'}</span>
+                    </button>
                   </div>
 
                   {/* Logout and metadata section */}

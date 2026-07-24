@@ -1605,15 +1605,7 @@ export default function App() {
             </button>
           </div>
           <div className="flex items-center gap-2.5">
-            <a 
-              href="https://wa.me/9779763323268" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              title="WhatsApp Support"
-              className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white transition duration-200 shadow-lg shadow-emerald-500/20 flex items-center justify-center hover:scale-105 shrink-0"
-            >
-              <MessageSquare className="w-5 h-5" />
-            </a>
+
 
             {/* Dropdown Menu Button */}
             <div className="relative">

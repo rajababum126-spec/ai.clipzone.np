@@ -9,7 +9,7 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 
-// Initialize Firestore with long-polling to prevent WebSocket connection failures inside sandboxed preview iframes
+// Initialize Firestore with auto-detected long polling for smooth offline and online connection management
 export const db = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId);

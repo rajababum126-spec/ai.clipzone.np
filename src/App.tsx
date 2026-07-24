@@ -143,14 +143,15 @@ export default function App() {
   // Dynamic Courses state
   const [courses, setCourses] = useState<Course[]>(() => {
     const cached = localStorage.getItem('clipzone_dynamic_courses');
+    const wasInitialized = localStorage.getItem('clipzone_courses_initialized');
     if (cached) {
       try {
         return JSON.parse(cached);
       } catch (e) {
-        return COURSES;
+        return wasInitialized ? [] : COURSES;
       }
     }
-    return COURSES;
+    return wasInitialized ? [] : COURSES;
   });
 
   // Course Add/Edit modal state
@@ -171,13 +172,25 @@ export default function App() {
     { title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }
   ]);
 
-  // Load courses from Firestore & seed if empty
+  // Load courses from Firestore & seed if empty ONLY on first ever setup
   useEffect(() => {
     const fetchCourses = async () => {
       try {
+        // Check if system config already initialized courses
+        let isSeeded = false;
+        try {
+          const configSnap = await getDoc(doc(db, 'system', 'config'));
+          if (configSnap.exists() && configSnap.data().courses_seeded) {
+            isSeeded = true;
+          }
+        } catch (configErr) {
+          console.warn('System config check:', configErr);
+        }
+
         const querySnapshot = await getDocs(collection(db, 'courses'));
-        if (querySnapshot.empty) {
-          // If Firestore is empty, seed original static COURSES with an initial order
+
+        if (!isSeeded && querySnapshot.empty) {
+          // First time database initialization: seed default static COURSES with initial order
           const seeded = COURSES.map((course, idx) => ({
             ...course,
             order: idx
@@ -185,14 +198,30 @@ export default function App() {
           for (const course of seeded) {
             await setDoc(doc(db, 'courses', course.id), course);
           }
+          try {
+            await setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true });
+          } catch (e) {
+            console.warn('Could not update system config:', e);
+          }
           setCourses(seeded);
           localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(seeded));
+          localStorage.setItem('clipzone_courses_initialized', 'true');
         } else {
+          // If docs exist or system was already seeded, do NOT re-seed deleted courses
+          if (!isSeeded && !querySnapshot.empty) {
+            try {
+              await setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true });
+            } catch (e) {
+              console.warn('Could not update system config:', e);
+            }
+          }
+
           const dbCourses: Course[] = [];
-          querySnapshot.forEach((doc) => {
-            dbCourses.push(doc.data() as Course);
+          querySnapshot.forEach((docSnap) => {
+            dbCourses.push(docSnap.data() as Course);
           });
-          // sort by order, default to alphabetical/id if not present
+
+          // Sort by order
           const sortedCourses = dbCourses.map((c, i) => ({
             ...c,
             order: typeof c.order === 'number' ? c.order : i
@@ -200,24 +229,23 @@ export default function App() {
 
           setCourses(sortedCourses);
           localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
+          localStorage.setItem('clipzone_courses_initialized', 'true');
         }
       } catch (err: any) {
-        console.warn('Failed to load courses from Firestore. Falling back to local cache or default courses:', err);
+        console.warn('Failed to load courses from Firestore. Falling back to local cache:', err);
         
-        // Try to load from localStorage cache first
         const cached = localStorage.getItem('clipzone_dynamic_courses');
+        const wasInitialized = localStorage.getItem('clipzone_courses_initialized');
         if (cached) {
           try {
             setCourses(JSON.parse(cached));
           } catch (jsonErr) {
-            setCourses(COURSES);
+            setCourses(wasInitialized ? [] : COURSES);
           }
         } else {
-          setCourses(COURSES);
+          setCourses(wasInitialized ? [] : COURSES);
         }
 
-        // Only call handleFirestoreError (which throws and is caught by diagnostics) if it's a security/permission issue.
-        // Doing so keeps the application robust and fully functional even when the sandbox/connection is offline.
         if (err && err.code === 'permission-denied') {
           handleFirestoreError(err, OperationType.GET, 'courses');
         } else {
@@ -869,7 +897,7 @@ export default function App() {
 
   const handleInstallAppClick = () => {
     if (isAppInstalled) {
-      showToast('AI Clipzone App पहिले नै इन्स्टल भइसकेको छ! 📱✨', 'info');
+      showToast('AI Clipzone App पहिले नै Home Screen मा इन्स्टल भइसकेको छ! 📱✨', 'info');
       return;
     }
 
@@ -877,7 +905,7 @@ export default function App() {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
         if (choiceResult.outcome === 'accepted') {
-          showToast('एप सफलतापूर्वक Home Screen मा थपियो! 🚀📱', 'success');
+          showToast('एप सफलतापूर्वक Home Screen मा इन्स्टल भयो! 🚀📱', 'success');
           setIsAppInstalled(true);
           setShowInstallModal(false);
         }
@@ -1056,8 +1084,15 @@ export default function App() {
           updatedList = [...prev, updatedCourse];
         }
         localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+        localStorage.setItem('clipzone_courses_initialized', 'true');
         return updatedList;
       });
+
+      try {
+        await setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true });
+      } catch (e) {
+        console.warn('Config set error:', e);
+      }
 
       showToast(editingCourse ? 'Course updated successfully!' : 'New course added successfully!', 'success');
       setShowCourseFormModal(false);
@@ -1082,8 +1117,15 @@ export default function App() {
       setCourses(prev => {
         const updatedList = prev.filter(c => c.id !== courseId);
         localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
+        localStorage.setItem('clipzone_courses_initialized', 'true');
         return updatedList;
       });
+
+      try {
+        await setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true });
+      } catch (e) {
+        console.warn('Config set error:', e);
+      }
 
       showToast('Course removed successfully!', 'success');
     } catch (err) {
@@ -3159,8 +3201,8 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Direct One-Tap Install Button if available */}
-              {deferredPrompt && (
+              {/* Direct One-Tap Install Button if available, or Full Browser launcher */}
+              {deferredPrompt ? (
                 <div className="mb-6 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 p-4 rounded-2xl border border-amber-500/30 text-center">
                   <p className="text-xs font-black text-amber-800 mb-2">
                     ⚡ तपाईंको ब्राउजरमा Direct One-Tap Install उपलब्ध छ!
@@ -3181,6 +3223,23 @@ export default function App() {
                   >
                     <Download className="w-4 h-4 animate-bounce" />
                     <span>Direct Install Web App 📲</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="mb-6 bg-slate-900 p-4 rounded-2xl text-white text-center shadow-lg border border-purple-500/30 space-y-3">
+                  <p className="text-xs font-bold text-amber-300">
+                    ⚡ १-क्लिक Direct Install / Add to Home Screen को लागि:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(window.location.href, '_blank');
+                      showToast('नयाँ ब्राउजर विन्डोमा खोलिँदैछ... 🌐', 'info');
+                    }}
+                    className="w-full bg-gradient-to-r from-purple-600 via-amber-500 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md uppercase tracking-wider"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>🌐 Open in Full Browser to Install 📲</span>
                   </button>
                 </div>
               )}

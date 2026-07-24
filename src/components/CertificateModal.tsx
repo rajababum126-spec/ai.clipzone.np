@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Printer, CheckCircle, Share2, ShieldCheck, Award } from 'lucide-react';
+import { X, Printer, CheckCircle, Share2, ShieldCheck, Award, Download, Loader2 } from 'lucide-react';
+import { toPng } from 'html-to-image';
 
 interface CertificateModalProps {
   studentName: string;
@@ -18,11 +19,32 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const certId = initialCertId || `AIC-CERT-${Math.floor(100000 + Math.random() * 900000)}`;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPng = async () => {
+    setIsDownloading(true);
+    try {
+      const node = document.getElementById('certificate-print-area');
+      if (!node) return;
+      const dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, fontEmbedCSS: '' });
+      const link = document.createElement('a');
+      const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
+      link.download = `AI_Clipzone_Certificate_${sanitizedName}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Download error:', err);
+      // Fallback to print if html-to-image encounters restricted cross-origin fonts
+      window.print();
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleCopyLink = () => {
@@ -84,13 +106,32 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Direct Image Download Button */}
+            <button
+              onClick={handleDownloadPng}
+              disabled={isDownloading}
+              className="bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-950 text-xs font-black px-4 py-2 rounded-xl transition shadow-lg shadow-amber-500/25 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Generating Certificate...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download Certificate (Direct PNG)</span>
+                </>
+              )}
+            </button>
+
             {/* Print / Save PDF Button */}
             <button
               onClick={handlePrint}
-              className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-slate-950 text-xs font-black px-4 py-2 rounded-xl transition shadow-lg shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print / Save PDF</span>
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print / PDF</span>
             </button>
 
             {/* Copy Verification Link */}
@@ -99,7 +140,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               className="bg-purple-900/80 hover:bg-purple-800 text-purple-200 text-xs font-bold px-3 py-2 rounded-xl border border-purple-700/50 transition flex items-center gap-1.5 cursor-pointer"
             >
               {copied ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied Details!' : 'Share / Copy'}</span>
+              <span>{copied ? 'Copied Details!' : 'Share'}</span>
             </button>
 
             {/* Close Button */}
@@ -220,9 +261,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             <div className="relative z-10 grid grid-cols-3 items-end text-center pt-2 sm:pt-4 border-t border-amber-500/20">
               {/* Left Signature: Director */}
               <div className="flex flex-col items-center">
-                <svg className="w-24 sm:w-32 h-8 sm:h-10 text-amber-300 opacity-90" viewBox="0 0 150 40" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10 30 Q 30 5, 50 25 T 90 10 T 130 35" strokeLinecap="round" />
-                  <path d="M30 20 Q 50 35, 70 15" strokeLinecap="round" />
+                <svg className="w-28 sm:w-36 h-10 sm:h-12 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {/* Executive Director Signature - Smooth Calligraphic Flourish */}
+                  <path d="M 16 38 C 12 22, 24 6, 40 10 C 52 13, 44 32, 26 35 C 18 37, 20 25, 36 22 C 54 18, 60 38, 74 30 C 82 25, 88 34, 98 28 C 106 24, 114 30, 126 26" strokeWidth="2.3" />
+                  <path d="M 38 32 C 68 28, 102 26, 142 27" strokeWidth="1.8" />
+                  <path d="M 58 37 Q 98 33, 132 34" strokeWidth="1.5" />
+                  <circle cx="146" cy="27" r="1.8" fill="currentColor" />
                 </svg>
                 <div className="w-24 sm:w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
                 <span className="font-sans text-[10px] sm:text-xs font-bold text-slate-200">
@@ -242,9 +286,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* Right Signature: Founder/CEO */}
               <div className="flex flex-col items-center">
-                <svg className="w-24 sm:w-32 h-8 sm:h-10 text-amber-300 opacity-90" viewBox="0 0 150 40" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M15 35 Q 40 10, 60 30 T 100 15 T 140 30" strokeLinecap="round" />
-                  <path d="M40 15 C 60 5, 80 40, 110 20" strokeLinecap="round" />
+                <svg className="w-28 sm:w-36 h-10 sm:h-12 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {/* Founder & CEO Signature - Expressive "Rajababu Mehta" Style Cursive Swirl */}
+                  <path d="M 14 36 C 10 14, 28 6, 42 14 C 52 20, 36 38, 22 28 C 14 20, 34 12, 60 18 C 76 22, 88 12, 98 8 C 106 5, 112 18, 104 26 C 96 34, 114 28, 130 20 C 138 16, 144 22, 148 18" strokeWidth="2.3" />
+                  <path d="M 28 26 C 58 20, 92 34, 124 24" strokeWidth="1.8" />
+                  <path d="M 44 34 Q 88 28, 138 30" strokeWidth="1.5" />
+                  <circle cx="152" cy="18" r="1.8" fill="currentColor" />
                 </svg>
                 <div className="w-24 sm:w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
                 <span className="font-sans text-[10px] sm:text-xs font-bold text-slate-200">
@@ -262,10 +309,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         <div className="mt-3 text-center text-xs text-slate-400 font-medium print:hidden">
           <p className="flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>This is an official verified certificate. You can print it directly or save it as a high-resolution PDF.</span>
+            <span>This is an official verified certificate. Click 'Download Certificate (Direct PNG)' to save instantly to your device.</span>
           </p>
         </div>
       </div>
     </AnimatePresence>
   );
 };
+

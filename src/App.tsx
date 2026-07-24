@@ -131,7 +131,13 @@ export default function App() {
   // Student Authentication & Course Activation states
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [userActivationKeys, setUserActivationKeys] = useState<any[]>([]);
+  const [userActivationKeys, setUserActivationKeys] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
   const [activeCourseIds, setActiveCourseIds] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
@@ -437,6 +443,9 @@ export default function App() {
       });
 
       setUserActivationKeys(keys);
+      if (keys.length > 0) {
+        localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(keys));
+      }
       setActiveCourseIds(activeIds);
     } catch (err) {
       console.error('Error fetching student keys:', err);
@@ -593,6 +602,11 @@ export default function App() {
       localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourses));
       setActiveCourseIds(updatedCourses);
 
+      const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+      const updatedKeysInfo = localKeysInfo.filter((k: any) => k.courseId !== courseId);
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updatedKeysInfo));
+      setUserActivationKeys(updatedKeysInfo);
+
       if (currentUser && currentUser.uid && !currentUser.uid.startsWith('local_')) {
         await fetchUserActiveKeys(currentUser);
       }
@@ -720,6 +734,27 @@ export default function App() {
         activeCodes.push(cleanCode);
         localStorage.setItem('clipzone_active_codes', JSON.stringify(activeCodes));
       }
+
+      // Save key metadata object locally for student profile dates
+      const claimNow = Date.now();
+      const durationMs = keyData?.duration === '1month' ? (30 * 24 * 60 * 60 * 1000) : (365 * 24 * 60 * 60 * 1000);
+      const keyExp = keyData?.expiresAt || (claimNow + durationMs);
+
+      const newKeyObj = {
+        id: cleanCode,
+        code: cleanCode,
+        courseId: unlockedCourseId,
+        courseTitle: unlockedCourseTitle,
+        studentName: assignedStudentName,
+        claimedAt: claimNow,
+        expiresAt: keyExp,
+        duration: keyData?.duration || '1year'
+      };
+
+      const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+      const updatedKeysInfo = [newKeyObj, ...localKeysInfo.filter((k: any) => k.courseId !== unlockedCourseId && k.code !== cleanCode)];
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updatedKeysInfo));
+      setUserActivationKeys(updatedKeysInfo);
 
       showToast(`नमस्ते ${assignedStudentName}! सफलतापूर्वक अनलक भयो: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
       setActivationCodeInput('');
@@ -1526,16 +1561,6 @@ export default function App() {
             </button>
           </div>
           <div className="flex items-center gap-2.5">
-            {/* Student Code Login Button */}
-            <button
-              onClick={() => setShowProfileModal(true)}
-              className="bg-gradient-to-r from-purple-700 to-indigo-800 hover:from-purple-600 hover:to-indigo-700 text-white font-black px-3.5 py-2 rounded-full text-xs shadow-md shadow-purple-900/30 transition-all cursor-pointer flex items-center gap-1.5 border border-purple-400/30 active:scale-95"
-              title="Student Code Login"
-            >
-              <span>🔑</span>
-              <span className="hidden sm:inline">Code Login</span>
-            </button>
-
             <a 
               href="https://wa.me/9779763323268" 
               target="_blank" 
@@ -1573,16 +1598,6 @@ export default function App() {
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
-                        setShowProfileModal(true);
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/30 transition flex items-center gap-2 cursor-pointer font-black"
-                    >
-                      🔑 Student Code Login
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
                         setCurrentView('home');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                         showToast('Welcome Home! 🏠', 'info');
@@ -1612,6 +1627,16 @@ export default function App() {
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
                     >
                       👤 Profile Page
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setShowProfileModal(true);
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer font-bold text-amber-400"
+                    >
+                      🔑 Login
                     </button>
                   </motion.div>
                 )}
@@ -3043,104 +3068,152 @@ export default function App() {
                 </div>
               ) : (
                 /* CASE: REGISTERED STUDENT */
-                <div className="text-left mt-2 space-y-6">
+                <div className="text-left mt-2 space-y-5">
                   {/* Student profile summary */}
-                  <div className="flex items-center gap-4 bg-purple-50/40 p-4 rounded-2xl border border-purple-100/60">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-700 to-indigo-800 text-white flex items-center justify-center text-lg font-black shadow-md shrink-0 uppercase">
-                      {(currentUser?.displayName || authName || 'ST').substring(0, 2)}
+                  <div className="flex items-center gap-4 bg-gradient-to-r from-purple-50 to-indigo-50/50 p-4 rounded-2xl border border-purple-100/80">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-800 text-white flex items-center justify-center text-lg font-black shadow-md shrink-0 uppercase ring-2 ring-purple-200">
+                      {(currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'ST').substring(0, 2)}
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="text-base font-black text-slate-900 tracking-tight truncate">
-                        {currentUser?.displayName || authName || 'Student Learner'}
+                        {currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
                       </h3>
-                      <p className="text-[10px] font-semibold text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Nepal Student Profile
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          Verified Student Account 🇳🇵
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Activate Course Secret Key Box */}
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                    <h4 className="text-[10px] font-black uppercase text-purple-800 tracking-wider mb-1.5">
-                      🗝️ Activate Course with Secret Code
-                    </h4>
-                    <p className="text-[11px] text-slate-500 font-semibold mb-3 leading-relaxed">
-                      Enter the secret key (provided by AI Clipzone Admin) to unlock and claim premium course playlists.
-                    </p>
-                    <form onSubmit={handleClaimActivationCode} className="flex gap-2">
-                      <input 
-                        type="text"
-                        value={activationCodeInput}
-                        onChange={(e) => setActivationCodeInput(e.target.value)}
-                        placeholder="उदाहरण: CLIP-XXXXXX"
-                        className="flex-1 bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3 py-2 text-xs font-mono font-black uppercase outline-hidden"
-                      />
-                      <button
-                        type="submit"
-                        disabled={isActivating || !activationCodeInput.trim()}
-                        className="bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-black px-4 py-2 rounded-xl text-xs transition shrink-0 cursor-pointer"
-                      >
-                        {isActivating ? 'Activating...' : 'Activate'}
-                      </button>
-                    </form>
-                  </div>
-
-                  {/* Unlocked / Enrolled Courses catalog list */}
+                  {/* Unlocked / Enrolled Courses catalog list with Enrolled & Expiry Dates */}
                   <div>
-                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2">
-                      📚 My Unlocked Courses ({activeCourseIds.length})
+                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2.5 flex items-center justify-between">
+                      <span>📚 My Activated Courses ({activeCourseIds.length})</span>
+                      <span className="text-purple-600 font-extrabold text-[9px] lowercase">active access</span>
                     </h4>
 
                     {activeCourseIds.length === 0 ? (
                       <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/60 text-center text-[11px] text-slate-400 font-semibold leading-relaxed">
-                        🚫 You haven't activated any courses yet.<br />
-                        Please enter your Secret Activation Code above!
+                        🚫 No activated courses found on this device.<br />
+                        Please log out and sign in using your Secret Activation Code.
                       </div>
                     ) : (
-                      <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
+                      <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
                         {courses
                           .filter(course => activeCourseIds.includes(course.id))
-                          .map((course) => (
-                            <div 
-                              key={course.id}
-                              onClick={() => {
-                                setSelectedCourse(course);
-                                setShowProfileModal(false);
-                                showToast(`Let's study "${course.title}"! 📖`, 'info');
-                              }}
-                              className="bg-slate-50 hover:bg-purple-50 p-3 rounded-2xl border border-slate-200/60 flex items-center justify-between gap-3 cursor-pointer transition"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm shrink-0">
-                                  📖
+                          .map((course) => {
+                            const keyInfo = userActivationKeys.find((k: any) => k.courseId === course.id) || 
+                              (() => {
+                                try {
+                                  return (JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]')).find((k: any) => k.courseId === course.id);
+                                } catch (e) { return null; }
+                              })();
+
+                            const enrolledTimestamp = keyInfo?.claimedAt || keyInfo?.createdAt || Date.now();
+                            const durationMs = keyInfo?.duration === '1month' ? (30 * 24 * 60 * 60 * 1000) : (365 * 24 * 60 * 60 * 1000);
+                            const expiresTimestamp = keyInfo?.expiresAt || (enrolledTimestamp + durationMs);
+
+                            const enrolledDateStr = new Date(enrolledTimestamp).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            });
+                            
+                            const expiredDateStr = new Date(expiresTimestamp).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            });
+
+                            const now = Date.now();
+                            const diffMs = expiresTimestamp - now;
+                            const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+                            return (
+                              <div 
+                                key={course.id}
+                                className="bg-slate-50 hover:bg-purple-50/50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5 transition"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+                                      📖
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h5 className="text-xs font-black text-slate-900 truncate">{course.title}</h5>
+                                      {keyInfo?.code && (
+                                        <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">
+                                          Code: {keyInfo.code}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={() => {
+                                      setSelectedCourse(course);
+                                      setShowProfileModal(false);
+                                      showToast(`Let's study "${course.title}"! 📖`, 'info');
+                                    }}
+                                    className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-xl transition cursor-pointer shadow-xs shrink-0 flex items-center gap-1"
+                                  >
+                                    Watch →
+                                  </button>
                                 </div>
-                                <div className="min-w-0">
-                                  <h5 className="text-xs font-black text-slate-800 truncate">{course.title}</h5>
-                                  <p className="text-[9px] text-emerald-600 font-black flex items-center gap-1 mt-0.5">
-                                    <span>🟢 Active Access</span>
-                                  </p>
+
+                                {/* Enrolled & Expired Dates */}
+                                <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold bg-white p-2 rounded-xl border border-slate-200/60">
+                                  <div>
+                                    <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Enrolled Date</span>
+                                    <span className="font-extrabold text-slate-800">📅 {enrolledDateStr}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Expired Date</span>
+                                    <span className="font-extrabold text-slate-800">🗓️ {expiredDateStr}</span>
+                                  </div>
+                                </div>
+
+                                {/* Days Remaining Banner */}
+                                <div className="flex items-center justify-between gap-2 pt-0.5">
+                                  {daysLeft > 0 ? (
+                                    <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-[10px] font-extrabold flex items-center justify-between">
+                                      <span className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        ⏳ बाँकी अवधि:
+                                      </span>
+                                      <span className="text-emerald-900 font-black bg-emerald-100/80 px-2 py-0.5 rounded-lg">
+                                        {daysLeft} दिन बाँकी ({daysLeft} Days Left)
+                                      </span>
+                                    </div>
+                                  ) : daysLeft === 0 ? (
+                                    <div className="w-full bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-xl text-[10px] font-extrabold flex items-center justify-between">
+                                      <span>⚠️ Today is the last day!</span>
+                                      <span className="font-black bg-amber-100 px-2 py-0.5 rounded-lg">आज अन्तिम दिन</span>
+                                    </div>
+                                  ) : (
+                                    <div className="w-full bg-rose-50 border border-rose-200 text-rose-800 px-3 py-1.5 rounded-xl text-[10px] font-extrabold flex items-center justify-between">
+                                      <span>❌ Access Expired</span>
+                                      <span className="font-black bg-rose-100 px-2 py-0.5 rounded-lg">म्याद सकियो</span>
+                                    </div>
+                                  )}
+
+                                  <button
+                                    onClick={() => {
+                                      if (window.confirm(`Are you sure you want to log out from "${course.title}" on this device? This will release the activation key for other devices.`)) {
+                                        handleReleaseCourseCode(course.id);
+                                      }
+                                    }}
+                                    className="text-[9px] font-black uppercase text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-lg transition cursor-pointer shrink-0"
+                                    title="Release key to use on another device"
+                                  >
+                                    Release 🔓
+                                  </button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (window.confirm(`Are you sure you want to log out from "${course.title}" on this device? This will release the activation key for other devices.`)) {
-                                      handleReleaseCourseCode(course.id);
-                                    }
-                                  }}
-                                  className="text-[9px] font-black uppercase text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-lg transition"
-                                  title="Log out of this course to use its code on another device"
-                                >
-                                  Release 🔓
-                                </button>
-                                <span className="text-[10px] font-bold text-purple-700 hover:underline">
-                                  Watch →
-                                </span>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                       </div>
                     )}
                   </div>

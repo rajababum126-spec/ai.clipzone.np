@@ -37,7 +37,8 @@ import {
   Home,
   Menu,
   ArrowRight,
-  RotateCw,
+  Maximize2,
+  Minimize2,
   Download,
   Smartphone,
   Share2
@@ -121,7 +122,7 @@ function getYouTubeIdGlobal(url: string): string {
 function getSecureYouTubeEmbedUrl(url: string, autoplay: boolean = false): string {
   const ytId = getYouTubeIdGlobal(url);
   if (!ytId) return url;
-  return `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3&enablejsapi=1&autoplay=${autoplay ? 1 : 0}`;
+  return `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3&disablekb=1&enablejsapi=1&autoplay=${autoplay ? 1 : 0}`;
 }
 
 export default function App() {
@@ -902,14 +903,51 @@ export default function App() {
     playlist: { title: string; duration: string; videoUrl: string }[];
     courseId: string;
   } | null>(null);
-  const [videoRotation, setVideoRotation] = useState<number>(0);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState<boolean>(false);
+  const [isForceLandscape, setIsForceLandscape] = useState<boolean>(false);
 
-  // Reset video rotation when the fullscreen video modal is closed
+  useEffect(() => {
+    const handleFsChange = () => {
+      const isFs = !!document.fullscreenElement;
+      setIsNativeFullscreen(isFs);
+      if (!isFs) {
+        setIsForceLandscape(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
   useEffect(() => {
     if (!fullscreenVideo) {
-      setVideoRotation(0);
+      setIsForceLandscape(false);
     }
   }, [fullscreenVideo]);
+
+  const toggleFullscreenMode = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen().catch(() => {});
+        }
+        const orientation = (window.screen as any)?.orientation;
+        if (orientation && typeof orientation.lock === 'function') {
+          await orientation.lock('landscape').catch(() => {});
+        }
+        // Auto rotate 90deg horizontally if on portrait screen / mobile view
+        if (window.innerHeight > window.innerWidth || window.innerWidth < 768) {
+          setIsForceLandscape(true);
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen().catch(() => {});
+        }
+        setIsForceLandscape(false);
+      }
+    } catch (err) {
+      console.log('Fullscreen error:', err);
+    }
+  };
 
   // Web App / PWA Install States
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -1806,9 +1844,7 @@ export default function App() {
                                 key={idx}
                                 whileHover={{ scale: 1.005, x: 2 }}
                                 onClick={() => {
-                                  const securePlayUrl = ytId
-                                    ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3`
-                                    : video.videoUrl;
+                                  const securePlayUrl = getSecureYouTubeEmbedUrl(video.videoUrl, true);
                                   setFullscreenVideo({
                                     courseTitle: currentClassroomCourse.title,
                                     title: video.title,
@@ -4139,47 +4175,45 @@ export default function App() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    setVideoRotation((prev) => (prev + 90) % 360);
-                    showToast('भिडियो घुमाइयो! (Video rotated!)', 'success');
-                  }}
+                  onClick={toggleFullscreenMode}
                   className="bg-slate-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg"
-                  title="Rotate Screen"
+                  title={isNativeFullscreen ? "Normal Screen Mode" : "Horizontal Fullscreen Mode"}
                 >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  <span>घुमाउनुहोस् (Rotate)</span>
+                  {isNativeFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  <span>{isNativeFullscreen ? 'Normal Screen' : 'Horizontal Fullscreen (फुलस्क्रिन)'}</span>
                 </button>
                 <button
                   onClick={() => {
+                    if (document.fullscreenElement && document.exitFullscreen) {
+                      document.exitFullscreen().catch(() => {});
+                    }
                     setFullscreenVideo(null);
                   }}
                   className="bg-slate-900/80 hover:bg-rose-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1 font-sans shadow-lg"
                 >
                   <X className="w-4 h-4" />
-                  <span className="hidden sm:inline">Exit Fullscreen</span>
+                  <span className="hidden sm:inline">Exit</span>
                 </button>
               </div>
             </div>
 
-            {/* Embed Video Iframe with Advanced CSS Rotation Support */}
+            {/* Embed Video Iframe Container with Horizontal Mobile Rotation Support */}
             <div 
               className={`bg-black flex items-center justify-center transition-all duration-300 ${
-                (videoRotation === 90 || videoRotation === 270) 
-                  ? 'fixed inset-0 z-50 w-[100vh] h-[100vw]' 
-                  : 'relative w-full aspect-video max-h-full overflow-hidden'
+                isForceLandscape 
+                  ? 'fixed inset-0 z-[10000] w-[100vh] h-[100vw]' 
+                  : 'relative w-full h-full flex-1 overflow-hidden'
               }`}
-              style={{
-                width: (videoRotation === 90 || videoRotation === 270) ? '100vh' : '100%',
-                height: (videoRotation === 90 || videoRotation === 270) ? '100vw' : undefined,
-                maxWidth: (videoRotation === 90 || videoRotation === 270) ? '100vh' : '100%',
-                maxHeight: (videoRotation === 90 || videoRotation === 270) ? '100vw' : '100%',
-                left: (videoRotation === 90 || videoRotation === 270) ? '50%' : undefined,
-                top: (videoRotation === 90 || videoRotation === 270) ? '50%' : undefined,
-                transform: (videoRotation === 90 || videoRotation === 270) 
-                  ? `translate(-50%, -50%) rotate(${videoRotation}deg)` 
-                  : (videoRotation === 180 ? 'rotate(180deg)' : 'none'),
-                transformOrigin: 'center center',
-              }}
+              style={isForceLandscape ? {
+                width: '100vh',
+                height: '100vw',
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%) rotate(90deg)',
+                zIndex: 10000,
+                backgroundColor: '#000'
+              } : {}}
             >
               {/* Context guard to prevent direct saving */}
               <div 
@@ -4187,62 +4221,27 @@ export default function App() {
                 className="absolute inset-0 z-50 pointer-events-none"
               />
 
-              {/* Elegant Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
-              <div 
-                className="absolute top-0 inset-x-0 h-16 bg-transparent z-45 cursor-default" 
-                title="Secure Player Header" 
-                onContextMenu={(e) => e.preventDefault()}
-                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
-              />
-              <div 
-                className="absolute bottom-0 right-0 w-44 h-14 bg-transparent z-45 cursor-default" 
-                title="Secure Player Branding Block" 
-                onContextMenu={(e) => e.preventDefault()}
-                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
-              />
-
-              {/* High-visibility Floating Rotate and Reset Bar inside the Video area itself */}
+              {/* Floating Horizontal Fullscreen Toggle inside Video area */}
               <div className="absolute top-4 right-4 z-[60] flex items-center gap-1.5">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setVideoRotation((prev) => (prev + 90) % 360);
-                    showToast('भिडियो घुमाइयो! (Video rotated!)', 'success');
+                    if (!isForceLandscape) {
+                      setIsForceLandscape(true);
+                      toggleFullscreenMode();
+                    } else {
+                      setIsForceLandscape(false);
+                      if (document.fullscreenElement && document.exitFullscreen) {
+                        document.exitFullscreen().catch(() => {});
+                      }
+                    }
                   }}
-                  className="bg-slate-950/90 hover:bg-purple-600 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
-                  title="Rotate Video"
+                  className="bg-slate-950/90 hover:bg-purple-600 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 shadow-lg active:scale-95"
+                  title="Toggle Fullscreen Horizontal Mode"
                 >
-                  <RotateCw className="w-3 h-3 animate-spin-slow" />
-                  <span>🔄 Rotate ({videoRotation}°)</span>
+                  {(isNativeFullscreen || isForceLandscape) ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                  <span>{(isNativeFullscreen || isForceLandscape) ? 'Normal View' : 'Horizontal Fullscreen ⛶'}</span>
                 </button>
-                
-                {(videoRotation === 90 || videoRotation === 180 || videoRotation === 270) && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setVideoRotation(0);
-                    }}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
-                    title="Reset to Normal"
-                  >
-                    Reset ↩️
-                  </button>
-                )}
-
-                {(videoRotation === 90 || videoRotation === 270) && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setVideoRotation(0);
-                      setFullscreenVideo(null);
-                    }}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
-                    title="Exit player"
-                  >
-                    <X className="w-3 h-3" />
-                    <span>Exit</span>
-                  </button>
-                )}
               </div>
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}

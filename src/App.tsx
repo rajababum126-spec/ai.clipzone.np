@@ -41,7 +41,8 @@ import {
   Minimize2,
   Download,
   Smartphone,
-  Share2
+  Share2,
+  Award
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -49,6 +50,7 @@ import { Course, ChatMessage } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
+import { CertificateModal } from './components/CertificateModal';
 
 enum OperationType {
   CREATE = 'create',
@@ -884,6 +886,11 @@ export default function App() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   // User profile modal state
   const [showProfileModal, setShowProfileModal] = useState(false);
+  // Certificate modal state
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [certificateCourseTitle, setCertificateCourseTitle] = useState('AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS');
+  const [certificateStudentName, setCertificateStudentName] = useState('');
+  const [certificateIssueDate, setCertificateIssueDate] = useState('');
   // Canvas ref for FonePay QR
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -1663,6 +1670,21 @@ export default function App() {
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
                     >
                       👤 Profile Page
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        const activeStudentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta';
+                        const activeCourse = courses.find(c => activeCourseIds.includes(c.id)) || courses[0];
+                        setCertificateCourseTitle(activeCourse ? activeCourse.title : 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS');
+                        setCertificateStudentName(activeStudentName);
+                        setCertificateIssueDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+                        setShowCertificateModal(true);
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-amber-950/80 hover:text-amber-200 transition flex items-center gap-2.5 cursor-pointer font-black text-amber-300 bg-amber-500/10 border border-amber-500/20"
+                    >
+                      📜 View Certificate
                     </button>
 
                     <button
@@ -2847,28 +2869,43 @@ export default function App() {
                       ⏳ Duration: {((selectedCourse.videos && selectedCourse.videos.length > 0 ? selectedCourse.videos : [{ duration: '12:15' }])[currentVideoIndex] || { duration: '12:00' }).duration} minutes
                     </p>
                     
-                    <button
-                      onClick={() => {
-                        const list = selectedCourse.videos && selectedCourse.videos.length > 0 
-                          ? selectedCourse.videos 
-                          : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: '' }];
-                        const currentLecture = list[currentVideoIndex] || list[0];
-                        const securePlayUrl = getSecureYouTubeEmbedUrl(currentLecture.videoUrl, true);
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      <button
+                        onClick={() => {
+                          const list = selectedCourse.videos && selectedCourse.videos.length > 0 
+                            ? selectedCourse.videos 
+                            : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: '' }];
+                          const currentLecture = list[currentVideoIndex] || list[0];
+                          const securePlayUrl = getSecureYouTubeEmbedUrl(currentLecture.videoUrl, true);
 
-                        setFullscreenVideo({
-                          courseTitle: selectedCourse.title,
-                          title: currentLecture.title,
-                          videoUrl: securePlayUrl,
-                          idx: currentVideoIndex,
-                          playlist: list,
-                          courseId: selectedCourse.id,
-                        });
-                        showToast(`भिडियोलाई इमर्सिभ फुलस्क्रिनमा खोलिँदैछ! 🎥`, 'success');
-                      }}
-                      className="mt-3 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer w-fit"
-                    >
-                      📺 Expand to Fullscreen (सुरक्षित प्लेयर)
-                    </button>
+                          setFullscreenVideo({
+                            courseTitle: selectedCourse.title,
+                            title: currentLecture.title,
+                            videoUrl: securePlayUrl,
+                            idx: currentVideoIndex,
+                            playlist: list,
+                            courseId: selectedCourse.id,
+                          });
+                          showToast(`भिडियोलाई इमर्सिभ फुलस्क्रिनमा खोलिँदैछ! 🎥`, 'success');
+                        }}
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
+                      >
+                        📺 Expand to Fullscreen
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta';
+                          setCertificateCourseTitle(selectedCourse.title);
+                          setCertificateStudentName(studentName);
+                          setCertificateIssueDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+                          setShowCertificateModal(true);
+                        }}
+                        className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-slate-950 text-[10px] font-black uppercase tracking-wider px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
+                      >
+                        📜 View Certificate (प्रमाणपत्र)
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -3107,6 +3144,33 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Certificate Banner */}
+                  <div className="bg-gradient-to-r from-amber-500/10 via-amber-400/15 to-yellow-500/10 border border-amber-400/40 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-sm">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-600 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                        <Award className="w-5 h-5 text-slate-950" />
+                      </div>
+                      <div className="min-w-0">
+                        <h5 className="text-xs font-black text-slate-900 truncate">Course Certificate 📜</h5>
+                        <p className="text-[10px] text-slate-600 font-semibold truncate">आफ्नो नाम र भर्ना मिति सहितको प्रमाणपत्र</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta';
+                        const activeCourse = courses.find(c => activeCourseIds.includes(c.id)) || courses[0];
+                        setCertificateCourseTitle(activeCourse ? activeCourse.title : 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS');
+                        setCertificateStudentName(studentName);
+                        setCertificateIssueDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+                        setShowProfileModal(false);
+                        setShowCertificateModal(true);
+                      }}
+                      className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-slate-950 font-black text-[10px] uppercase tracking-wider px-3 py-2 rounded-xl transition cursor-pointer shadow-md shrink-0 flex items-center gap-1"
+                    >
+                      View Certificate 📜
+                    </button>
+                  </div>
+
                   {/* Unlocked / Enrolled Courses catalog list with Enrolled & Expiry Dates */}
                   <div>
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2.5 flex items-center justify-between">
@@ -3171,16 +3235,33 @@ export default function App() {
                                     </div>
                                   </div>
 
-                                  <button
-                                    onClick={() => {
-                                      setSelectedCourse(course);
-                                      setShowProfileModal(false);
-                                      showToast(`Let's study "${course.title}"! 📖`, 'info');
-                                    }}
-                                    className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-xl transition cursor-pointer shadow-xs shrink-0 flex items-center gap-1"
-                                  >
-                                    Watch →
-                                  </button>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      onClick={() => {
+                                        const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta';
+                                        setCertificateCourseTitle(course.title);
+                                        setCertificateStudentName(studentName);
+                                        setCertificateIssueDate(enrolledDateStr);
+                                        setShowProfileModal(false);
+                                        setShowCertificateModal(true);
+                                      }}
+                                      className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 border border-amber-400/40 font-black text-[10px] uppercase tracking-wider px-2.5 py-1.5 rounded-xl transition cursor-pointer shrink-0 flex items-center gap-1"
+                                      title="View Course Certificate"
+                                    >
+                                      📜 Certificate
+                                    </button>
+
+                                    <button
+                                      onClick={() => {
+                                        setSelectedCourse(course);
+                                        setShowProfileModal(false);
+                                        showToast(`Let's study "${course.title}"! 📖`, 'info');
+                                      }}
+                                      className="bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-xl transition cursor-pointer shadow-xs shrink-0 flex items-center gap-1"
+                                    >
+                                      Watch →
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {/* Enrolled & Expired Dates */}
@@ -4324,6 +4405,23 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* CERTIFICATE MODAL */}
+      {showCertificateModal && (
+        <CertificateModal
+          studentName={certificateStudentName || currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta'}
+          courseTitle={certificateCourseTitle}
+          issueDate={certificateIssueDate || '2083/01/14'}
+          onClose={() => setShowCertificateModal(false)}
+          onUpdateName={(newName) => {
+            setCertificateStudentName(newName);
+            try {
+              localStorage.setItem('clipzone_student_name', newName);
+            } catch (e) {}
+            showToast('Certificate name updated successfully! 📜', 'success');
+          }}
+        />
       )}
 
     </div>

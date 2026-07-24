@@ -613,41 +613,11 @@ export default function App() {
       return;
     }
 
-    let studentName = authName.trim() || localStorage.getItem('clipzone_student_name') || '';
-    if (!studentName) {
-      const inputName = window.prompt('Please enter your Full Name to register this course:');
-      if (inputName && inputName.trim()) {
-        studentName = inputName.trim();
-        setAuthName(studentName);
-        localStorage.setItem('clipzone_student_name', studentName);
-      } else {
-        showToast('Your Full Name is required to register the course!', 'error');
-        return;
-      }
-    }
-
     setIsActivating(true);
     try {
-      // Ensure we have a student profile session (Anonymous or virtual local user!)
-      let activeUser = currentUser;
-      if (!activeUser) {
-        try {
-          const userCredential = await signInAnonymously(auth);
-          activeUser = userCredential.user;
-          await updateProfile(activeUser, {
-            displayName: studentName
-          });
-          setCurrentUser(activeUser);
-        } catch (authErr) {
-          console.warn('Firebase anonymous sign-in failed/disabled during activation, falling back to local student profile:', authErr);
-          activeUser = getOrCreateLocalUser(studentName) as any;
-          setCurrentUser(activeUser);
-        }
-      }
-
       const deviceId = getOrCreateDeviceId();
 
-      // Look up key in Firestore
+      // Look up key in Firestore first to extract student name and course info
       let keyData: any = null;
       let keyDocRef = null;
       let firestoreError = false;
@@ -657,8 +627,7 @@ export default function App() {
         if (keyDocSnap.exists()) {
           keyData = keyDocSnap.data();
         } else {
-          // Key doesn't exist in Firestore
-          showToast('Invalid secret activation code! Please check and try again.', 'error');
+          showToast('अमान्य सेक्रेट कोड! कृपया कोड चेक गरेर पुनः प्रयास गर्नुहोस्। (Invalid secret code)', 'error');
           setIsActivating(false);
           return;
         }
@@ -667,20 +636,50 @@ export default function App() {
         firestoreError = true;
       }
 
+      // Automatically get Student Name assigned by Admin to this key
+      const assignedStudentName = keyData?.studentName || keyData?.claimedByEmail || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+
+      // Ensure student session profile is initialized automatically with assigned name
+      let activeUser = currentUser;
+      if (!activeUser || !localStorage.getItem('clipzone_student_name')) {
+        try {
+          const userCredential = await signInAnonymously(auth);
+          activeUser = userCredential.user;
+          await updateProfile(activeUser, {
+            displayName: assignedStudentName
+          });
+          setCurrentUser(activeUser);
+        } catch (authErr) {
+          console.warn('Firebase anonymous sign-in failed/disabled during activation, falling back to local student profile:', authErr);
+          activeUser = getOrCreateLocalUser(assignedStudentName) as any;
+          setCurrentUser(activeUser);
+        }
+        setAuthName(assignedStudentName);
+        localStorage.setItem('clipzone_student_name', assignedStudentName);
+      } else if (assignedStudentName && assignedStudentName !== 'Student Learner') {
+        setAuthName(assignedStudentName);
+        localStorage.setItem('clipzone_student_name', assignedStudentName);
+        if (activeUser && activeUser.uid) {
+          try {
+            await updateProfile(activeUser, { displayName: assignedStudentName });
+          } catch (e) {
+            console.warn('Profile name update:', e);
+          }
+        }
+      }
+
       // Single-device login check:
-      // If code is already claimed and has an activeDeviceId that is NOT ours, block it!
       if (keyData && keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
-        showToast('यो कोड पहिले नै अर्को डिभाइसमा एक्टिभ छ! कृपया पहिले त्यहाँबाट लगआउट गर्नुहोस्। (This code is already active on another device! Please log out from that device first.)', 'error');
+        showToast('यो कोड पहिले नै अर्को डिभाइसमा एक्टिभ छ! कृपया पहिले त्यहाँबाट लगआउट गर्नुहोस्। (This code is already active on another device!)', 'error');
         setIsActivating(false);
         return;
       }
 
-      // Determine course to unlock (if offline or database error, check if code starts with CLIP- then extract)
+      // Determine course to unlock
       let unlockedCourseId = keyData?.courseId;
       let unlockedCourseTitle = keyData?.courseTitle;
 
       if (!unlockedCourseId) {
-        // Fallback offline guess only if Firestore error occurred
         if (firestoreError && courses && courses.length > 0) {
           unlockedCourseId = courses[0].id;
           unlockedCourseTitle = courses[0].title;
@@ -697,7 +696,8 @@ export default function App() {
           await updateDoc(keyDocRef, {
             status: 'used',
             activeDeviceId: deviceId,
-            claimedByEmail: studentName,
+            claimedByEmail: assignedStudentName,
+            studentName: assignedStudentName,
             claimedByUid: activeUser?.uid || 'local_student',
             claimedAt: Date.now(),
             expiresAt: Date.now() + (keyData.duration === '1month' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000)
@@ -715,17 +715,15 @@ export default function App() {
         setActiveCourseIds(localActivated);
       }
 
-      // Save the active code locally for periodic verification and release
       const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
       if (!activeCodes.includes(cleanCode)) {
         activeCodes.push(cleanCode);
         localStorage.setItem('clipzone_active_codes', JSON.stringify(activeCodes));
       }
 
-      showToast(`सफलतापूर्वक अनलक भयो: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
+      showToast(`नमस्ते ${assignedStudentName}! सफलतापूर्वक अनलक भयो: "${unlockedCourseTitle || 'Your Course'}"! 🎉`, 'success');
       setActivationCodeInput('');
       
-      // Refresh user's key list if they are a real Firebase user
       if (activeUser && activeUser.uid && !activeUser.uid.startsWith('local_')) {
         await fetchUserActiveKeys(activeUser);
       }
@@ -751,6 +749,12 @@ export default function App() {
     const selectedCourseData = courses.find(c => c.id === targetCourseId);
     if (!selectedCourseData) return;
 
+    const studentName = genStudentName.trim();
+    if (!studentName) {
+      showToast('कृपया विद्यार्थीको नाम राख्नुहोस् (Please enter Student Name)!', 'error');
+      return;
+    }
+
     // Generate readable random secret code
     const randId = Math.random().toString(36).substring(2, 8).toUpperCase();
     const finalCode = `CLIP-${randId}`;
@@ -762,19 +766,21 @@ export default function App() {
         duration: genSelectedDuration,
         createdAt: Date.now(),
         courseId: selectedCourseData.id,
-        courseTitle: selectedCourseData.title
+        courseTitle: selectedCourseData.title,
+        studentName: studentName
       });
 
       if (autoCopy) {
         try {
           await navigator.clipboard.writeText(finalCode);
-          showToast(`Secret code "${finalCode}" generated & copied to clipboard! 📋`, 'success');
+          showToast(`Secret code "${finalCode}" generated for ${studentName} & copied! 📋`, 'success');
         } catch (clipErr) {
-          showToast(`Secret code "${finalCode}" generated successfully!`, 'success');
+          showToast(`Secret code "${finalCode}" generated for ${studentName}!`, 'success');
         }
       } else {
-        showToast(`Secret code "${finalCode}" generated successfully!`, 'success');
+        showToast(`Secret code "${finalCode}" generated for ${studentName}!`, 'success');
       }
+      setGenStudentName('');
       fetchAdminKeys(); // reload
     } catch (err) {
       console.error('Failed to generate code:', err);
@@ -929,6 +935,7 @@ export default function App() {
   const [allActivationKeys, setAllActivationKeys] = useState<any[]>([]);
   const [genSelectedCourseId, setGenSelectedCourseId] = useState('');
   const [genSelectedDuration, setGenSelectedDuration] = useState<'1month' | '1year'>('1year');
+  const [genStudentName, setGenStudentName] = useState('');
   const [adminSearchKeyQuery, setAdminSearchKeyQuery] = useState('');
   const [isAdminLoadingKeys, setIsAdminLoadingKeys] = useState(false);
 
@@ -1518,7 +1525,17 @@ export default function App() {
               )}
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Student Code Login Button */}
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="bg-gradient-to-r from-purple-700 to-indigo-800 hover:from-purple-600 hover:to-indigo-700 text-white font-black px-3.5 py-2 rounded-full text-xs shadow-md shadow-purple-900/30 transition-all cursor-pointer flex items-center gap-1.5 border border-purple-400/30 active:scale-95"
+              title="Student Code Login"
+            >
+              <span>🔑</span>
+              <span className="hidden sm:inline">Code Login</span>
+            </button>
+
             <a 
               href="https://wa.me/9779763323268" 
               target="_blank" 
@@ -1551,8 +1568,18 @@ export default function App() {
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-slate-100 flex flex-col gap-1"
+                    className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-slate-100 flex flex-col gap-1"
                   >
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setShowProfileModal(true);
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/30 transition flex items-center gap-2 cursor-pointer font-black"
+                    >
+                      🔑 Student Code Login
+                    </button>
+
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
@@ -1585,22 +1612,6 @@ export default function App() {
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
                     >
                       👤 Profile Page
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        handleInstallAppClick();
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-amber-500/10 hover:from-amber-500/30 hover:to-purple-500/30 text-amber-300 transition flex items-center justify-between gap-2 cursor-pointer border border-amber-500/30 shadow-sm mt-0.5"
-                    >
-                      <div className="flex items-center gap-2 font-bold">
-                        <Smartphone className="w-4 h-4 text-amber-400" />
-                        <span>📲 Install Web App</span>
-                      </div>
-                      <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-md uppercase tracking-wider">
-                        APP
-                      </span>
                     </button>
                   </motion.div>
                 )}
@@ -2984,13 +2995,13 @@ export default function App() {
                   Securing user session...
                 </div>
               ) : !currentUser && !localStorage.getItem('clipzone_student_name') ? (
-                /* CASE: NO NAME REGISTERED - ASKS FOR STUDENT NAME FOR INSTANT SETUP */
+                /* CASE: UNREGISTERED / NOT LOGGED IN STUDENT - DIRECT CODE LOGIN */
                 <div className="text-left mt-2">
                   <h3 className="text-xl font-black text-slate-900 tracking-tight">
                     Welcome to AI Clipzone Nepal 🇳🇵
                   </h3>
-                  <p className="text-xs text-slate-400 mt-1 font-semibold leading-relaxed">
-                    भिडियो कोर्सहरू अनलक गर्न र हेर्नको लागि कृपया आफ्नो नाम दर्ता गर्नुहोस्। दर्ता गर्न कुनै पासवर्ड वा इमेल चाहिदैन!
+                  <p className="text-xs text-slate-500 mt-1.5 font-semibold leading-relaxed">
+                    भिडियो कोर्सहरू अनलक गर्न र अध्ययन सुरु गर्न एडमिनबाट प्राप्त Secret Activation Code (कोर्स कोड) यहाँ राख्नुहोस्:
                   </p>
 
                   {authError && (
@@ -2999,25 +3010,34 @@ export default function App() {
                     </div>
                   )}
 
-                  <form onSubmit={handleStudentAnonymousLogin} className="space-y-4 mt-6">
+                  <form onSubmit={handleClaimActivationCode} className="space-y-4 mt-6">
                     <div>
-                      <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5 tracking-wider">विद्यार्थीको पूरा नाम (Full Name) *</label>
+                      <label className="block text-[10px] font-black uppercase text-purple-700 mb-1.5 tracking-wider">
+                        Secret Activation Code (कोर्स सेक्रेट कोड) *
+                      </label>
                       <input 
                         type="text"
                         required
-                        value={authName}
-                        onChange={(e) => setAuthName(e.target.value)}
-                        placeholder="उदाहरण: Ram Bahadur"
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 outline-hidden"
+                        value={activationCodeInput}
+                        onChange={(e) => setActivationCodeInput(e.target.value)}
+                        placeholder="उदाहरण: CLIP-XXXXXX"
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-3.5 text-sm font-mono font-black uppercase text-slate-800 outline-hidden tracking-widest shadow-inner"
                       />
                     </div>
 
                     <button
                       type="submit"
-                      disabled={isAuthSubmitting}
-                      className="w-full bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition cursor-pointer"
+                      disabled={isActivating || !activationCodeInput.trim()}
+                      className="w-full bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition cursor-pointer flex items-center justify-center gap-2"
                     >
-                      {isAuthSubmitting ? 'Saving Profile...' : '🚀 Instant Register & Start Learning'}
+                      {isActivating ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          Verifying Code...
+                        </>
+                      ) : (
+                        '🚀 Unlock Course & Sign In'
+                      )}
                     </button>
                   </form>
                 </div>
@@ -3125,30 +3145,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Install Web App Option in Profile */}
-                  <div className="bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 p-3.5 rounded-2xl border border-amber-500/30 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                        <Smartphone className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span>AI Clipzone Web App</span>
-                      </h4>
-                      <p className="text-[10px] font-semibold text-slate-500 mt-0.5 truncate">
-                        {isAppInstalled ? '✅ App installed on home screen' : 'Direct install as mobile app on your phone'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowProfileModal(false);
-                        handleInstallAppClick();
-                      }}
-                      className="bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-600 hover:to-purple-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-3.5 py-2 rounded-xl transition cursor-pointer shadow-md shrink-0 flex items-center gap-1"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>{isAppInstalled ? 'Installed' : 'Install App'}</span>
-                    </button>
-                  </div>
-
                   {/* Logout and metadata section */}
                   <div className="flex items-center justify-between border-t border-slate-100 pt-4 text-[11px]">
                     <div className="text-slate-400 font-bold">
@@ -3169,193 +3165,6 @@ export default function App() {
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition mt-6 cursor-pointer"
               >
                 Close Portal
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* WEB APP INSTALLATION MODAL */}
-      <AnimatePresence>
-        {showInstallModal && (
-          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowInstallModal(false)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
-            />
-
-            {/* Modal Box */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white max-w-lg w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100 text-slate-800 max-h-[90vh] overflow-y-auto"
-            >
-              <button 
-                onClick={() => setShowInstallModal(false)}
-                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-purple-600 text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-purple-500/20 ring-4 ring-purple-100">
-                  <Smartphone className="w-8 h-8" />
-                </div>
-                <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-                  AI Clipzone Web App Install 📱
-                </h3>
-                <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">
-                  वेबसाइटलाई आफ्नो मोबाइलमा Direct Web App को रूपमा इन्स्टल गर्नुहोस् र होम स्क्रिनबाटै १-क्लिकमा कोर्षहरु अध्ययन गर्नुहोस्!
-                </p>
-              </div>
-
-              {/* Direct One-Tap Install Button if available, or Full Browser launcher */}
-              {deferredPrompt ? (
-                <div className="mb-6 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 p-4 rounded-2xl border border-amber-500/30 text-center">
-                  <p className="text-xs font-black text-amber-800 mb-2">
-                    ⚡ तपाईंको ब्राउजरमा Direct One-Tap Install उपलब्ध छ!
-                  </p>
-                  <button
-                    onClick={() => {
-                      deferredPrompt.prompt();
-                      deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
-                        if (choiceResult.outcome === 'accepted') {
-                          showToast('एप इन्स्टल भई Home Screen मा थपियो! 📱🎉', 'success');
-                          setIsAppInstalled(true);
-                          setShowInstallModal(false);
-                        }
-                        setDeferredPrompt(null);
-                      });
-                    }}
-                    className="w-full bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-600 hover:to-purple-700 text-white font-extrabold py-3.5 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer active:scale-98"
-                  >
-                    <Download className="w-4 h-4 animate-bounce" />
-                    <span>Direct Install Web App 📲</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="mb-6 bg-slate-900 p-4 rounded-2xl text-white text-center shadow-lg border border-purple-500/30 space-y-3">
-                  <p className="text-xs font-bold text-amber-300">
-                    ⚡ १-क्लिक Direct Install / Add to Home Screen को लागि:
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.open(window.location.href, '_blank');
-                      showToast('नयाँ ब्राउजर विन्डोमा खोलिँदैछ... 🌐', 'info');
-                    }}
-                    className="w-full bg-gradient-to-r from-purple-600 via-amber-500 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md uppercase tracking-wider"
-                  >
-                    <Smartphone className="w-4 h-4" />
-                    <span>🌐 Open in Full Browser to Install 📲</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Platform Selector Tabs */}
-              <div className="flex bg-slate-100 p-1 rounded-2xl mb-5">
-                <button
-                  onClick={() => setActiveInstallTab('android')}
-                  className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeInstallTab === 'android'
-                      ? 'bg-white text-purple-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  🤖 Android
-                </button>
-                <button
-                  onClick={() => setActiveInstallTab('ios')}
-                  className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeInstallTab === 'ios'
-                      ? 'bg-white text-purple-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  🍎 iPhone (iOS)
-                </button>
-                <button
-                  onClick={() => setActiveInstallTab('desktop')}
-                  className={`flex-1 py-2.5 rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeInstallTab === 'desktop'
-                      ? 'bg-white text-purple-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  💻 Laptop / PC
-                </button>
-              </div>
-
-              {/* Instructions per Tab */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 mb-6 text-xs text-slate-700 space-y-3">
-                {activeInstallTab === 'android' && (
-                  <>
-                    <div className="font-extrabold text-slate-900 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
-                      <span>🤖 Android Phone मा App Install गर्ने तरिका:</span>
-                    </div>
-                    <ol className="list-decimal list-inside space-y-2 font-medium leading-relaxed">
-                      <li>मोबाइलको <strong>Chrome / Brave</strong> ब्राउजरमा यो वेबसाइट खोल्नुहोस्।</li>
-                      <li>माथि दायाँ तर्फ रहेको <strong>३ वटा थोप्ला (⋮)</strong> मेनुमा थिच्नुहोस्।</li>
-                      <li>मेनुबाट <strong>"Install app"</strong> (वा <strong>"Add to Home screen"</strong>) विकल्प चयन गर्नुहोस्।</li>
-                      <li><strong>Install</strong> बटन थिच्नुहोस्। अब तपाईंको मोबाइलको Home Screen मा AI Clipzone App बस्नेछ!</li>
-                    </ol>
-                  </>
-                )}
-
-                {activeInstallTab === 'ios' && (
-                  <>
-                    <div className="font-extrabold text-slate-900 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
-                      <span>🍎 iPhone / iPad मा App Install गर्ने तरिका:</span>
-                    </div>
-                    <ol className="list-decimal list-inside space-y-2 font-medium leading-relaxed">
-                      <li>आफ्नो iPhone मा <strong>Safari Browser</strong> मा यो वेबसाइट खोल्नुहोस्।</li>
-                      <li>तल रहेको <strong>Share (शेयर) बटन 📤</strong> मा थिच्नुहोस्।</li>
-                      <li>तल स्क्रोल गरी <strong>"Add to Home Screen"</strong> (होम स्क्रिनमा थप्नुहोस्) मा थिच्नुहोस्।</li>
-                      <li>माथि दायाँ तर्फको <strong>"Add"</strong> थिच्नुहोस्! अब एप iPhone को स्क्रीनमा तयार भयो।</li>
-                    </ol>
-                  </>
-                )}
-
-                {activeInstallTab === 'desktop' && (
-                  <>
-                    <div className="font-extrabold text-slate-900 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
-                      <span>💻 Laptop / Desktop मा App Install गर्ने तरिका:</span>
-                    </div>
-                    <ol className="list-decimal list-inside space-y-2 font-medium leading-relaxed">
-                      <li><strong>Chrome वा Edge</strong> ब्राउजरको एड्रेस बारमा हेर्नुहोस्।</li>
-                      <li>दायाँ कुनामा रहेको <strong>Install App आयकन (📥)</strong> मा थिच्नुहोस्।</li>
-                      <li><strong>"Install AI Clipzone Nepal"</strong> मा क्लिक गर्नुहोस्! अब यो Desktop App को रूपमा छुट्टै विन्डोमा चल्नेछ।</li>
-                    </ol>
-                  </>
-                )}
-              </div>
-
-              {/* App Features List */}
-              <div className="grid grid-cols-2 gap-2 mb-6">
-                <div className="bg-purple-50 p-2.5 rounded-xl border border-purple-100 flex items-center gap-2 text-[11px] font-bold text-purple-900">
-                  <span className="text-base">⚡</span> १-क्लिक मा सिधै खोल्न सकिने
-                </div>
-                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100 flex items-center gap-2 text-[11px] font-bold text-amber-900">
-                  <span className="text-base">🚀</span> Buffer-free HD Video Player
-                </div>
-                <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 flex items-center gap-2 text-[11px] font-bold text-emerald-900">
-                  <span className="text-base">🔒</span> सुरक्षित र गोप्य अध्ययन
-                </div>
-                <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-100 flex items-center gap-2 text-[11px] font-bold text-blue-900">
-                  <span className="text-base">🇳🇵</span> Nepal's #1 AI Course App
-                </div>
-              </div>
-
-              <button 
-                onClick={() => setShowInstallModal(false)}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer"
-              >
-                बुझेँ (Close Window)
               </button>
             </motion.div>
           </div>
@@ -3580,6 +3389,17 @@ export default function App() {
 
                   <div className="space-y-4">
                     <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Student Name (विद्यार्थीको पुरा नाम) *</label>
+                      <input 
+                        type="text"
+                        value={genStudentName}
+                        onChange={(e) => setGenStudentName(e.target.value)}
+                        placeholder="उदाहरण: Ramesh Sharma"
+                        className="w-full bg-white border border-slate-200 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs transition outline-hidden font-bold text-slate-700"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Select Course Catalog *</label>
                       <select 
                         value={genSelectedCourseId}
@@ -3688,6 +3508,7 @@ export default function App() {
                             return (
                               key.code.toLowerCase().includes(query) ||
                               (key.courseTitle || '').toLowerCase().includes(query) ||
+                              (key.studentName || '').toLowerCase().includes(query) ||
                               (key.claimedByEmail || '').toLowerCase().includes(query)
                             );
                           })
@@ -3722,9 +3543,11 @@ export default function App() {
                                 <p className="text-[11px] font-extrabold text-slate-700 truncate max-w-[280px]">
                                   {key.courseTitle || 'All Courses'}
                                 </p>
+                                <p className="text-[10px] font-bold text-purple-700 truncate">
+                                  👤 Student: <span className="font-extrabold text-slate-900">{key.studentName || key.claimedByEmail || 'Not Assigned'}</span>
+                                </p>
                                 {key.status === 'used' && (
                                   <div className="text-[9px] font-medium text-slate-400 space-y-0.5">
-                                    <p className="truncate">Claimed: <span className="font-bold text-slate-500">{key.claimedByEmail}</span></p>
                                     <p>Claimed At: <span className="font-bold">{new Date(key.claimedAt || 0).toLocaleDateString()}</span></p>
                                     <p className="flex items-center gap-1 font-semibold">
                                       Session: {key.activeDeviceId ? (

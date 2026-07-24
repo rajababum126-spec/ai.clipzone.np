@@ -118,6 +118,12 @@ function getYouTubeIdGlobal(url: string): string {
   return (match && match[2].length === 11) ? match[2] : '';
 }
 
+function getSecureYouTubeEmbedUrl(url: string, autoplay: boolean = false): string {
+  const ytId = getYouTubeIdGlobal(url);
+  if (!ytId) return url;
+  return `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=1&iv_load_policy=3&enablejsapi=1&autoplay=${autoplay ? 1 : 0}`;
+}
+
 export default function App() {
   // Admin Mode states
   const [showAdminMenu, setShowAdminMenu] = useState(false);
@@ -2760,13 +2766,13 @@ export default function App() {
 
                     {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
                     <div 
-                      className="absolute top-0 inset-x-0 h-14 bg-transparent z-45 cursor-default" 
+                      className="absolute top-0 inset-x-0 h-16 bg-transparent z-45 cursor-default" 
                       title="Secure Player Header" 
                       onContextMenu={(e) => e.preventDefault()}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     />
                     <div 
-                      className="absolute bottom-0 right-0 w-36 h-12 bg-transparent z-45 cursor-default" 
+                      className="absolute bottom-0 right-0 w-44 h-14 bg-transparent z-45 cursor-default" 
                       title="Secure Player Branding Block" 
                       onContextMenu={(e) => e.preventDefault()}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
@@ -2787,19 +2793,7 @@ export default function App() {
                         : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
                       
                       const currentLecture = activePlaylist[currentVideoIndex] || activePlaylist[0];
-                      
-                      // Extract Youtube ID safely
-                      const getYouTubeId = (url: string): string => {
-                        if (!url) return '';
-                        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-                        const match = url.match(regExp);
-                        return (match && match[2].length === 11) ? match[2] : '';
-                      };
-
-                      const ytId = getYouTubeId(currentLecture.videoUrl);
-                      const secureEmbedSrc = ytId 
-                        ? `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3&disablekb=1&autoplay=0`
-                        : currentLecture.videoUrl;
+                      const secureEmbedSrc = getSecureYouTubeEmbedUrl(currentLecture.videoUrl, false);
 
                       return (
                         <iframe
@@ -2807,6 +2801,7 @@ export default function App() {
                           className="w-full h-full object-cover"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                           allowFullScreen
+                          sandbox="allow-scripts allow-same-origin allow-presentation"
                           title={currentLecture.title}
                           id="secure-lecture-iframe"
                         />
@@ -2830,10 +2825,7 @@ export default function App() {
                           ? selectedCourse.videos 
                           : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: '' }];
                         const currentLecture = list[currentVideoIndex] || list[0];
-                        const ytId = getYouTubeIdGlobal(currentLecture.videoUrl);
-                        const securePlayUrl = ytId
-                          ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3`
-                          : currentLecture.videoUrl;
+                        const securePlayUrl = getSecureYouTubeEmbedUrl(currentLecture.videoUrl, true);
 
                         setFullscreenVideo({
                           courseTitle: selectedCourse.title,
@@ -4253,6 +4245,20 @@ export default function App() {
                 )}
               </div>
 
+              {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
+              <div 
+                className="absolute top-0 inset-x-0 h-16 bg-transparent z-45 cursor-default pointer-events-auto" 
+                title="Secure Player Header" 
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              />
+              <div 
+                className="absolute bottom-0 right-0 w-48 h-16 bg-transparent z-45 cursor-default pointer-events-auto" 
+                title="Secure Player Branding Block" 
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              />
+
               {/* Watermark in fullscreen */}
               <div className="absolute bottom-6 left-6 z-40 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-purple-500/20 pointer-events-none select-none shadow-lg">
                 <p className="text-[9px] md:text-[10px] text-slate-300 font-mono font-bold flex items-center gap-2">
@@ -4262,10 +4268,11 @@ export default function App() {
               </div>
 
               <iframe
-                src={fullscreenVideo.videoUrl}
+                src={getSecureYouTubeEmbedUrl(fullscreenVideo.videoUrl, true)}
                 className="w-full h-full absolute inset-0 border-0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
+                sandbox="allow-scripts allow-same-origin allow-presentation"
                 title={fullscreenVideo.title}
               />
             </div>
@@ -4287,15 +4294,12 @@ export default function App() {
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
               {fullscreenVideo.playlist.map((video, idx) => {
                 const isPlaying = fullscreenVideo.idx === idx;
-                const videoYtId = getYouTubeIdGlobal(video.videoUrl);
 
                 return (
                   <div
                     key={idx}
                     onClick={() => {
-                      const securePlayUrl = videoYtId
-                        ? `https://www.youtube-nocookie.com/embed/${videoYtId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3`
-                        : video.videoUrl;
+                      const securePlayUrl = getSecureYouTubeEmbedUrl(video.videoUrl, true);
                       setFullscreenVideo({
                         ...fullscreenVideo,
                         title: video.title,

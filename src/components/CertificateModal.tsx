@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Download, Printer, CheckCircle, Edit3, Share2, ShieldCheck, Award } from 'lucide-react';
+import { X, Printer, CheckCircle, Share2, ShieldCheck, Award } from 'lucide-react';
 
 interface CertificateModalProps {
   studentName: string;
@@ -8,33 +8,21 @@ interface CertificateModalProps {
   issueDate?: string;
   certificateId?: string;
   onClose: () => void;
-  onUpdateName?: (newName: string) => void;
 }
 
 export const CertificateModal: React.FC<CertificateModalProps> = ({
-  studentName: initialStudentName,
+  studentName = 'Mr. Rajababu Mehta',
   courseTitle,
-  issueDate: initialIssueDate,
+  issueDate = '2083/01/14',
   certificateId: initialCertId,
   onClose,
-  onUpdateName,
 }) => {
-  const [studentName, setStudentName] = useState(initialStudentName || 'Mr. Rajababu Mehta');
-  const [issueDate, setIssueDate] = useState(initialIssueDate || '2083/01/14');
-  const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const certId = initialCertId || `AIC-CERT-${Math.floor(100000 + Math.random() * 900000)}`;
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleSaveName = () => {
-    setIsEditing(false);
-    if (onUpdateName) {
-      onUpdateName(studentName);
-    }
   };
 
   const handleCopyLink = () => {
@@ -46,7 +34,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[3000] bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-6 overflow-y-auto">
+      <div className="fixed inset-0 z-[3000] bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-start p-2 sm:p-6 overflow-y-auto min-h-screen">
         {/* Printable CSS style injection */}
         <style>{`
           @media print {
@@ -79,7 +67,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         `}</style>
 
         {/* Top Floating Bar Controls */}
-        <div className="w-full max-w-5xl bg-slate-900/90 border border-slate-800 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-3 text-white shadow-xl z-20 print:hidden">
+        <div className="w-full max-w-4xl bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 sm:p-3 mb-2 sm:mb-4 flex flex-wrap items-center justify-between gap-2.5 text-white shadow-xl z-20 print:hidden shrink-0">
           <div className="flex items-center gap-2">
             <Award className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
             <div>
@@ -96,15 +84,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Edit Name Button */}
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isEditing ? 'Done Editing' : 'Edit Name / Date'}</span>
-            </button>
-
             {/* Print / Save PDF Button */}
             <button
               onClick={handlePrint}
@@ -134,56 +113,14 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
         </div>
 
-        {/* Inline Editor Drawer if editing */}
-        {isEditing && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-5xl bg-slate-900 border border-amber-500/30 rounded-2xl p-4 mb-4 text-white z-20 shadow-xl print:hidden flex flex-wrap items-end gap-4"
-          >
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-[10px] font-black uppercase text-amber-400 mb-1">
-                Student Full Name (प्रमाणपत्रमा देखिने नाम)
-              </label>
-              <input
-                type="text"
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
-                placeholder="उदा: Mr. Rajababu Mehta"
-                className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3 py-2 text-sm font-bold text-amber-200 outline-hidden"
-              />
-            </div>
-
-            <div className="w-44">
-              <label className="block text-[10px] font-black uppercase text-amber-400 mb-1">
-                Date of Issue (जारी मिति)
-              </label>
-              <input
-                type="text"
-                value={issueDate}
-                onChange={(e) => setIssueDate(e.target.value)}
-                placeholder="उदा: 2083/01/14"
-                className="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3 py-2 text-sm font-bold text-amber-200 outline-hidden"
-              />
-            </div>
-
-            <button
-              onClick={handleSaveName}
-              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl cursor-pointer"
-            >
-              Save Certificate Details
-            </button>
-          </motion.div>
-        )}
-
-        {/* MAIN CERTIFICATE CANVAS BOX (Matches Uploaded Image Style Perfectly) */}
-        <div className="w-full flex-1 flex items-center justify-center my-auto">
+        {/* MAIN CERTIFICATE CANVAS BOX (Fits cleanly without force scrolling) */}
+        <div className="w-full flex-1 flex items-center justify-center my-auto py-1 sm:py-2">
           <div
             id="certificate-print-area"
-            className="relative w-full max-w-[960px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-4 sm:p-8 md:p-10 shadow-2xl overflow-hidden border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans"
+            className="relative w-full max-w-[880px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-3 sm:p-6 md:p-8 shadow-2xl overflow-hidden border-2 sm:border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans"
             style={{
               backgroundImage: 'radial-gradient(circle at center, #0f1c42 0%, #060b1e 80%)',
-              boxShadow: '0 25px 60px -15px rgba(0,0,0,0.9), inset 0 0 100px rgba(197,155,39,0.15)',
+              boxShadow: '0 25px 60px -15px rgba(0,0,0,0.9), inset 0 0 80px rgba(197,155,39,0.15)',
             }}
           >
             {/* Outer Luxury Metallic Border Multi-Layers */}

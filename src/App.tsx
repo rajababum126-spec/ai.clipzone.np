@@ -1675,21 +1675,6 @@ export default function App() {
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
-                        const activeStudentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta';
-                        const activeCourse = courses.find(c => activeCourseIds.includes(c.id)) || courses[0];
-                        setCertificateCourseTitle(activeCourse ? activeCourse.title : 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS');
-                        setCertificateStudentName(activeStudentName);
-                        setCertificateIssueDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
-                        setShowCertificateModal(true);
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-amber-950/80 hover:text-amber-200 transition flex items-center gap-2.5 cursor-pointer font-black text-amber-300 bg-amber-500/10 border border-amber-500/20"
-                    >
-                      📜 View Certificate
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
                         setShowProfileModal(true);
                       }}
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer font-bold text-amber-400"
@@ -4414,13 +4399,6 @@ export default function App() {
           courseTitle={certificateCourseTitle}
           issueDate={certificateIssueDate || '2083/01/14'}
           onClose={() => setShowCertificateModal(false)}
-          onUpdateName={(newName) => {
-            setCertificateStudentName(newName);
-            try {
-              localStorage.setItem('clipzone_student_name', newName);
-            } catch (e) {}
-            showToast('Certificate name updated successfully! 📜', 'success');
-          }}
         />
       )}
 

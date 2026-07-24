@@ -16,6 +16,7 @@ export const COURSES: Course[] = [
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiI6q11UwbnIp-U7yN_NZi3p9W2QuqU4gNTcwUrQHpQ9BjvwRdFd0wRnZke-p9TJfULwJmqx07Qq4tEHuehoBh6ea_Yhfbx9sl4XGKqke1HA43rkqRVYR37fsI5DXmCff4LZZYXUVawHNugWiFNXXyG8J0Wv5uUM5xxcsSv-pOnYX9v37fjy_qEv5p5Zq8l/w400-h221/2236.png",
     isPopular: true,
     popularText: "🔥 MOST POPULAR - BEST SELLER",
+    language: "Hindi & Nepali",
     videos: [
       { title: "Introduction to generative AI models & prompt writing", duration: "12:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" }
     ]
@@ -38,6 +39,7 @@ export const COURSES: Course[] = [
       "🤖 AI tools प्रयोग गरेर content बनाउने तरिका"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgXZL_14KcAVWtUkV6YOCtIePNyDndSmM7r8dFVVyp1QXLTKJzStC3O1pSK3-pwsFKhOE0RLyPfXYUo_S6ARYjLWBuRH0Ao5hipjntJKBptoXhsNU584o_EKJb-JfmGyzn57edya_hzH9RqwBvtQjwGaMIasclVW5BGKE0Uef6nDSgBiqr7diao-4seXWlX/s1600/12843.jpg",
+    language: "Hindi & Nepali",
     videos: [
       { title: "Dhruv Rathee Style Video Creation Strategy", duration: "14:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" }
     ]
@@ -55,6 +57,7 @@ export const COURSES: Course[] = [
       "Editing Techniques"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiamlf7uMKucGgjA_KFqVtclRDjBq0Y9jA6vvf_xKLmgkfiWVfvRdnnRWYHQnpH8xGzHE_sdfzhThAHtR9YLfNqqTDDoH5aJdYWaZAzD7VFWatJueGo7AShTCKUUOc1jKppsgclGgyifi2nXqmMNDR_1oyzfiJsTzJ60V6r-UscNlCFxibxx0DrIUT-7xHc/s320/2237.png",
+    language: "Nepali",
     videos: [
       { title: "Nepali AI Video Generation Tutorial - Step by step", duration: "15:40", videoUrl: "https://www.youtube.com/embed/W_P1V4A38Xo" }
     ]
@@ -72,6 +75,7 @@ export const COURSES: Course[] = [
       "Trending Song Styles"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhYjOG4lDyf5xe2U0X4FfB9tthigSJGm1DldgU9qU2CDbnWSrtNX2zX0GyiPKwGy0I-ostrdq0O02Okm1m90M6aFTH6T7TLfNIpRHQtpwBLY0gKXHdH4dPJoV3n-IReclxD56h8Tuuvyrb73XpaTfjEcw6s7JvZkRJDFxAp_kjAf3EUDAMCaWaBHgUKdcYD/s320/2241.jpg",
+    language: "Nepali",
     videos: [
       { title: "Suno AI v3 & v4 - Write Lyrics & Generate Music Tracks", duration: "20:10", videoUrl: "https://www.youtube.com/embed/D3_qXvV6O_g" }
     ]
@@ -89,6 +93,7 @@ export const COURSES: Course[] = [
       "Fast Creation Techniques"
     ],
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhQkRMqywnYfxP8pjE04fdw157KvkRbC2yr4pHdnuVgWrGc3-yT5vmUFhLYyJXXIU3XrXS5mAyLxba3MEfAMb5Z4soHFa3hr69_4dYDU3qlJwIEIX1ImF7a5BeUOTYWM4Rbfj5-6Sz-H-8IMFe0-ErEH1KFqtJ1qJG8LnOqg-mm1mb1LQyD696l7iYl_2oi/s320/2239.jpg",
+    language: "Nepali & Hindi",
     videos: [
       { title: "Gamma App & Tome AI: Create stunning slides in 1 minute", duration: "12:40", videoUrl: "https://www.youtube.com/embed/V6_VpC6Q26o" }
     ]

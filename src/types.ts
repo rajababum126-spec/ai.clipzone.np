@@ -15,6 +15,7 @@ export interface Course {
   isPopular?: boolean;
   popularText?: string;
   order?: number;
+  language?: string;
   videos: CourseVideo[];
 }
 

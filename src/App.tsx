@@ -167,6 +167,7 @@ export default function App() {
   const [formImage, setFormImage] = useState('');
   const [formIsPopular, setFormIsPopular] = useState(false);
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
+  const [formLanguage, setFormLanguage] = useState('Hindi & Nepali');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
   const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string }[]>([
     { title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }
@@ -1006,6 +1007,7 @@ export default function App() {
     setFormImage(course.image);
     setFormIsPopular(!!course.isPopular);
     setFormPopularText(course.popularText || '🔥 MOST POPULAR - BEST SELLER');
+    setFormLanguage(course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali'));
     setFormLearnText(course.learn.join('\n'));
     setFormVideos(course.videos || []);
     setShowCourseFormModal(true);
@@ -1022,6 +1024,7 @@ export default function App() {
     setFormImage('');
     setFormIsPopular(false);
     setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
+    setFormLanguage('Hindi & Nepali');
     setFormLearnText('');
     setFormVideos([
       { title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }
@@ -1055,7 +1058,7 @@ export default function App() {
 
     const currentOrder = editingCourse && typeof editingCourse.order === 'number' ? editingCourse.order : courses.length;
 
-        const updatedCourse: Course = {
+    const updatedCourse: Course = {
       id: finalId,
       title: formTitle,
       price: formPrice,
@@ -1065,6 +1068,7 @@ export default function App() {
       image: formImage,
       isPopular: formIsPopular,
       popularText: formIsPopular ? formPopularText : undefined,
+      language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
       videos: formVideos.length > 0 ? formVideos : [{ title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]
     };
@@ -1917,7 +1921,7 @@ export default function App() {
 
                       <p className="text-slate-500 text-xs md:text-sm mt-3 font-semibold flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                        Language: {course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi' : 'Nepali'} • Includes Certificate
+                        Language: {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')} • Includes Certificate
                       </p>
 
                       {/* Highlights checklist */}
@@ -2882,6 +2886,15 @@ export default function App() {
                 <h3 className="text-xl md:text-2xl font-extrabold text-slate-900 leading-tight text-left">
                   {selectedCourse.title}
                 </h3>
+                
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="bg-purple-50 text-purple-700 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-purple-100 flex items-center gap-1">
+                    🌐 Language: {selectedCourse.language || (selectedCourse.id.includes('rathee') || selectedCourse.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
+                  </span>
+                  <span className="bg-emerald-50 text-emerald-700 text-[11px] font-extrabold px-2.5 py-1 rounded-md border border-emerald-100">
+                    📜 Certificate
+                  </span>
+                </div>
                 
                 <p className="text-3xl font-black text-purple-700 mt-3 text-left">
                   {selectedCourse.price}
@@ -3860,6 +3873,35 @@ export default function App() {
                     placeholder="e.g. I want to buy Dhruv Rathee YouTube Blueprint course"
                     className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-800 transition outline-hidden"
                   />
+                </div>
+
+                {/* Course Language / Medium */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Course Language / Medium (कोर्षको भाषा) *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={formLanguage}
+                    onChange={(e) => setFormLanguage(e.target.value)}
+                    placeholder="e.g. Nepali, Hindi & Nepali, English"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-purple-500 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 transition outline-hidden"
+                  />
+                  <div className="mt-1.5 flex gap-1.5 flex-wrap">
+                    {['Nepali', 'Hindi & Nepali', 'Nepali & English', 'Hindi', 'English'].map((langOption) => (
+                      <button
+                        key={langOption}
+                        type="button"
+                        onClick={() => setFormLanguage(langOption)}
+                        className={`text-[9px] font-bold px-2.5 py-1 rounded-md transition cursor-pointer ${
+                          formLanguage === langOption
+                            ? 'bg-purple-700 text-white shadow-2xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {langOption}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Course Thumbnail Image URL */}

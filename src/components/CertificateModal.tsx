@@ -32,7 +32,30 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
     try {
       const node = document.getElementById('certificate-print-area');
       if (!node) return;
-      const dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, fontEmbedCSS: '' });
+
+      // Save existing inline style values
+      const origWidth = node.style.width;
+      const origMinWidth = node.style.minWidth;
+      const origMaxWidth = node.style.maxWidth;
+
+      // Ensure node is rendered at standard 880px landscape box during capture
+      node.style.width = '880px';
+      node.style.minWidth = '880px';
+      node.style.maxWidth = '880px';
+
+      // Capture high-resolution PNG (2640px width at 3x pixelRatio)
+      const dataUrl = await toPng(node, {
+        quality: 1.0,
+        pixelRatio: 3,
+        cacheBust: true,
+        fontEmbedCSS: '',
+      });
+
+      // Restore original responsive inline styles immediately
+      node.style.width = origWidth;
+      node.style.minWidth = origMinWidth;
+      node.style.maxWidth = origMaxWidth;
+
       const link = document.createElement('a');
       const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
       link.download = `AI_Clipzone_Certificate_${sanitizedName}.png`;
@@ -40,7 +63,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       link.click();
     } catch (err) {
       console.error('Download error:', err);
-      // Fallback to print if html-to-image encounters restricted cross-origin fonts
+      // Fallback to print if html-to-image fails
       window.print();
     } finally {
       setIsDownloading(false);
@@ -154,11 +177,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
         </div>
 
-        {/* MAIN CERTIFICATE CANVAS BOX (Fits cleanly without force scrolling) */}
-        <div className="w-full flex-1 flex items-center justify-center my-auto py-1 sm:py-2">
+        {/* MAIN CERTIFICATE CANVAS BOX (Fits cleanly without force scrolling on desktop, scrollable on mobile) */}
+        <div className="w-full flex-1 flex items-center justify-center my-auto py-2 px-1 overflow-x-auto">
           <div
             id="certificate-print-area"
-            className="relative w-full max-w-[880px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-3 sm:p-6 md:p-8 shadow-2xl overflow-hidden border-2 sm:border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans"
+            className="relative w-full max-w-[880px] min-w-[320px] sm:min-w-[650px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-3 sm:p-6 md:p-8 shadow-2xl overflow-hidden border-2 sm:border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans shrink-0"
             style={{
               backgroundImage: 'radial-gradient(circle at center, #0f1c42 0%, #060b1e 80%)',
               boxShadow: '0 25px 60px -15px rgba(0,0,0,0.9), inset 0 0 80px rgba(197,155,39,0.15)',
@@ -200,7 +223,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               <div className="flex items-center gap-2">
                 <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-lg bg-gradient-to-br from-[#121e42] to-[#080e26]">
                   <div className="w-full h-full rounded-full border border-[#ca8a04]/60 flex flex-col items-center justify-center text-center p-1 bg-[#09112a]">
-                    <span className="font-['Playfair_Display'] font-black text-sm sm:text-lg md:text-xl text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500 leading-none">
+                    <span className="font-['Playfair_Display'] font-black text-sm sm:text-lg md:text-xl text-amber-200 leading-none">
                       Ai
                     </span>
                     <span className="text-[7px] sm:text-[9px] md:text-[10px] font-extrabold text-amber-300 tracking-wider uppercase leading-none mt-0.5">
@@ -212,7 +235,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* CENTER TITLE: CERTIFICATE OF ACHIEVEMENT */}
               <div className="flex-1 text-center pr-12 sm:pr-16">
-                <h1 className="font-['Cinzel'] text-2xl sm:text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#fffbeb] via-[#fef08a] to-[#d97706] tracking-[0.15em] uppercase drop-shadow-md">
+                <h1
+                  className="font-['Cinzel'] text-2xl sm:text-4xl md:text-5xl font-black text-[#fef08a] bg-clip-text bg-gradient-to-r from-[#fffbeb] via-[#fef08a] to-[#d97706] tracking-[0.15em] uppercase drop-shadow-md"
+                  style={{ color: '#fef08a' }}
+                >
                   CERTIFICATE
                 </h1>
                 <h2 className="font-['Cinzel'] text-[10px] sm:text-xs md:text-sm font-black text-amber-300/90 tracking-[0.35em] uppercase mt-1">
@@ -229,7 +255,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* STUDENT CALLIGRAPHIC NAME */}
               <div className="my-2 sm:my-3 relative inline-block max-w-full px-4">
-                <h2 className="font-['Great_Vibes'] text-3xl sm:text-5xl md:text-6xl text-transparent bg-clip-text bg-gradient-to-r from-[#ffffff] via-[#fef08a] to-[#eab308] font-bold tracking-wide drop-shadow-lg leading-tight px-2">
+                <h2
+                  className="font-['Great_Vibes'] text-3xl sm:text-5xl md:text-6xl text-[#fef08a] bg-clip-text bg-gradient-to-r from-[#ffffff] via-[#fef08a] to-[#eab308] font-bold tracking-wide drop-shadow-lg leading-tight px-2"
+                  style={{ color: '#fef08a' }}
+                >
                   {studentName}
                 </h2>
 
@@ -247,7 +276,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </p>
 
               {/* COURSE TITLE */}
-              <h3 className="font-sans font-black text-sm sm:text-xl md:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-[#ffffff] via-[#fef08a] to-[#f59e0b] tracking-wider uppercase my-1.5 sm:my-2 leading-snug max-w-3xl mx-auto px-4">
+              <h3
+                className="font-sans font-black text-sm sm:text-xl md:text-2xl text-[#fef08a] bg-clip-text bg-gradient-to-r from-[#ffffff] via-[#fef08a] to-[#f59e0b] tracking-wider uppercase my-1.5 sm:my-2 leading-snug max-w-3xl mx-auto px-4"
+                style={{ color: '#fef08a' }}
+              >
                 {courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS'}
               </h3>
 

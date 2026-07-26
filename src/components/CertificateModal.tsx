@@ -292,13 +292,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* CENTER TITLE: CERTIFICATE OF ACHIEVEMENT */}
                 <div className="flex-1 text-center px-2">
                   <h1
-                    className="cert-font-cinzel text-4xl font-black tracking-[0.18em] uppercase drop-shadow-md text-[#fef08a]"
+                    className="cert-font-cinzel text-5xl font-black tracking-[0.18em] uppercase drop-shadow-md text-[#fef08a]"
                     style={{ textShadow: '0 2px 10px rgba(245, 158, 11, 0.35)' }}
                   >
                     CERTIFICATE
                   </h1>
                   <h2
-                    className="cert-font-cinzel text-sm font-black tracking-[0.35em] uppercase mt-1 text-[#fcd34d]"
+                    className="cert-font-cinzel text-base font-black tracking-[0.35em] uppercase mt-1 text-[#fcd34d]"
                   >
                     OF ACHIEVEMENT
                   </h2>
@@ -309,15 +309,15 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </div>
 
               {/* CERTIFICATION BODY STATEMENT */}
-              <div className="relative z-10 py-2 px-8 my-auto">
-                <p className="font-serif italic text-slate-300 text-lg tracking-wide">
+              <div className="relative z-10 py-1 px-8 my-auto">
+                <p className="font-serif italic text-slate-300 text-xl tracking-wide">
                   This is to certify that
                 </p>
 
                 {/* STUDENT CALLIGRAPHIC NAME */}
-                <div className="my-3 relative block w-full max-w-full px-4 text-center">
+                <div className="my-2 relative block w-full max-w-full px-4 text-center">
                   <h2
-                    className="cert-font-script text-6xl font-bold tracking-wide leading-tight px-2 block mx-auto text-[#fef08a]"
+                    className="cert-font-script text-7xl font-bold tracking-wide leading-tight px-2 block mx-auto text-[#fef08a]"
                     style={{
                       fontFamily: "'Great Vibes', 'Playfair Display', Georgia, cursive, serif",
                       color: '#fef08a',
@@ -328,36 +328,36 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   </h2>
 
                   {/* Golden Horizontal Divider Line with Flourish Tips & Center Sparkle */}
-                  <div className="w-full max-w-lg mx-auto flex items-center justify-center gap-2 mt-2">
+                  <div className="w-full max-w-lg mx-auto flex items-center justify-center gap-2 mt-1">
                     <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-[#e6c663] to-[#e6c663]" />
-                    <span className="text-amber-300 text-sm font-serif">♦ ✦ ♦</span>
+                    <span className="text-amber-300 text-base font-serif">♦ ✦ ♦</span>
                     <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent via-[#e6c663] to-[#e6c663]" />
                   </div>
                 </div>
 
                 {/* ACHIEVEMENT STATEMENT */}
                 <p
-                  className="cert-font-cinzel text-sm font-bold tracking-[0.25em] uppercase mt-2 text-[#fcd34d]"
+                  className="cert-font-cinzel text-base font-bold tracking-[0.25em] uppercase mt-2 text-[#fcd34d]"
                 >
                   HAS SUCCESSFULLY COMPLETED
                 </p>
 
                 {/* COURSE TITLE */}
                 <h3
-                  className="font-sans font-black text-2xl tracking-wider uppercase my-2 leading-snug max-w-3xl mx-auto px-4 text-[#fef08a]"
+                  className="font-sans font-black text-3xl tracking-wider uppercase my-2 leading-snug max-w-3xl mx-auto px-4 text-[#fef08a]"
                   style={{ textShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}
                 >
                   {courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS'}
                 </h3>
 
                 {/* COURSE DESCRIPTION SUMMARY */}
-                <p className="text-slate-300/90 text-sm font-normal max-w-2xl mx-auto leading-relaxed px-4 my-1">
+                <p className="text-slate-300/90 text-base font-normal max-w-2xl mx-auto leading-relaxed px-4 my-1">
                   an advanced training in 30+ AI Tools covering AI Video Creation, AI Image Generation, AI Music & Song Creation, Graphic Design, Website Development, Professional Presentations, and other AI-powered digital skills.
                 </p>
               </div>
 
               {/* BOTTOM SIGNATURES & ISSUE DATE SECTION */}
-              <div className="relative z-10 grid grid-cols-3 items-end text-center pt-3 border-t border-amber-500/20 px-6 pb-1">
+              <div className="relative z-10 grid grid-cols-3 items-end text-center pt-2 border-t border-amber-500/20 px-6 pb-1">
                 {/* Left Signature: Director */}
                 <div className="flex flex-col items-center">
                   <svg className="w-36 h-11 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -367,17 +367,17 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     <circle cx="146" cy="27" r="1.8" fill="currentColor" />
                   </svg>
                   <div className="w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
-                  <span className="font-sans text-xs font-bold text-slate-200">
+                  <span className="font-sans text-sm font-bold text-slate-200">
                     Director
                   </span>
                 </div>
 
                 {/* Center: Date of Issue */}
                 <div className="flex flex-col items-center justify-end pb-1">
-                  <span className="font-sans text-xs font-bold text-amber-300 tracking-wider">
+                  <span className="font-sans text-sm font-bold text-amber-300 tracking-wider">
                     Date of issue: {issueDate}
                   </span>
-                  <span className="text-[10px] text-amber-400/60 font-mono mt-0.5">
+                  <span className="text-xs text-amber-400/70 font-mono mt-0.5">
                     Verify: {certId}
                   </span>
                 </div>
@@ -391,10 +391,10 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     <circle cx="152" cy="18" r="1.8" fill="currentColor" />
                   </svg>
                   <div className="w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
-                  <span className="font-sans text-xs font-bold text-slate-200">
+                  <span className="font-sans text-sm font-bold text-slate-200">
                     Founder/CEO
                   </span>
-                  <span className="font-sans text-[10px] text-slate-400 font-medium">
+                  <span className="font-sans text-xs text-slate-400 font-medium">
                     (AI Clipzone)
                   </span>
                 </div>

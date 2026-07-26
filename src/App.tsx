@@ -882,6 +882,25 @@ export default function App() {
 
   // Course details modal state
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+
+  // Smoothly scroll to the specific course card/section and open the details modal
+  const handleEnrollCourse = (course: Course) => {
+    if (currentView !== 'home') {
+      setCurrentView('home');
+    }
+    setSelectedCourse(course);
+    setTimeout(() => {
+      const cardEl = document.getElementById(`course-card-${course.id}`);
+      if (cardEl) {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        const coursesSec = document.getElementById('courses-section');
+        if (coursesSec) {
+          coursesSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    }, 80);
+  };
   // QR modal state
   const [showQrModal, setShowQrModal] = useState(false);
   // User navigation menu state
@@ -1993,12 +2012,13 @@ export default function App() {
               {courses.map((course, index) => (
                 <motion.div
                   key={course.id}
+                  id={`course-card-${course.id}`}
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: '-50px' }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                   whileHover={{ y: -6 }}
-                  className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full"
+                  className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full scroll-mt-28"
                 >
                   {course.isPopular && (
                     <div className="absolute top-0 inset-x-0 bg-rose-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
@@ -2084,10 +2104,10 @@ export default function App() {
                         </button>
                       ) : (
                         <button 
-                          onClick={() => setSelectedCourse(course)}
-                          className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center font-sans"
+                          onClick={() => handleEnrollCourse(course)}
+                          className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-2 font-sans"
                         >
-                          Enroll Now / View Details
+                          🚀 Enroll Now / View Details
                         </button>
                       )}
 

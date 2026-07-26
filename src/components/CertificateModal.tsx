@@ -38,41 +38,24 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         await document.fonts.ready;
       }
 
-      // Clone node for isolated offscreen capture without viewport overflow or outer shadow margins
-      const clone = node.cloneNode(true) as HTMLElement;
+      // Save original style
+      const origBoxShadow = node.style.boxShadow;
 
-      // Strip outer drop-shadow so html-to-image doesn't add wide empty borders
-      clone.style.boxShadow = 'inset 0 0 80px rgba(197,155,39,0.15)';
-      clone.style.width = '1200px';
-      clone.style.height = '848px';
-      clone.style.minWidth = '1200px';
-      clone.style.maxWidth = '1200px';
-      clone.style.minHeight = '848px';
-      clone.style.maxHeight = '848px';
-      clone.style.position = 'fixed';
-      clone.style.left = '-9999px';
-      clone.style.top = '0';
-      clone.style.margin = '0';
-      clone.style.padding = '36px 48px';
-      clone.style.transform = 'none';
-      clone.style.borderRadius = '16px';
+      // Temporarily strip outer drop shadow so image has no extra outer margin around the border
+      node.style.boxShadow = 'none';
 
-      document.body.appendChild(clone);
+      // Warm up image/font rendering cache
+      await toPng(node, { cacheBust: true }).catch(() => {});
 
-      // Brief delay to allow browser to calculate layout on clone
-      await new Promise((resolve) => setTimeout(resolve, 150));
-
-      const dataUrl = await toPng(clone, {
+      // Generate sharp high quality PNG directly from visible certificate element
+      const dataUrl = await toPng(node, {
         quality: 1.0,
-        pixelRatio: 2,
+        pixelRatio: 2.5,
         cacheBust: true,
-        width: 1200,
-        height: 848,
-        fontEmbedCSS: '',
       });
 
-      // Remove clone
-      document.body.removeChild(clone);
+      // Restore box shadow
+      node.style.boxShadow = origBoxShadow;
 
       const link = document.createElement('a');
       const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -198,7 +181,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         <div className="w-full flex-1 flex items-center justify-center my-auto py-2 px-1 overflow-x-auto">
           <div
             id="certificate-print-area"
-            className="relative w-full max-w-[880px] min-w-[320px] sm:min-w-[650px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-3 sm:p-6 md:p-8 shadow-2xl overflow-hidden border-2 sm:border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans shrink-0"
+            className="relative w-full max-w-[880px] min-w-[320px] sm:min-w-[650px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-6 sm:p-10 md:p-12 shadow-2xl overflow-hidden border-2 sm:border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans shrink-0"
             style={{
               backgroundImage: 'radial-gradient(circle at center, #0f1c42 0%, #060b1e 80%)',
               boxShadow: '0 25px 60px -15px rgba(0,0,0,0.9), inset 0 0 80px rgba(197,155,39,0.15)',
@@ -209,80 +192,81 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             <div className="absolute inset-3 sm:inset-4 border border-[#8a6a18] rounded-md pointer-events-none opacity-80" />
 
             {/* Corner Ornate Baroque Flourish Decorations (4 Corners) */}
-            <svg className="absolute top-3 left-3 w-12 h-12 sm:w-20 sm:h-20 text-[#e6c663] opacity-85 pointer-events-none" viewBox="0 0 100 100" fill="currentColor">
+            <svg className="absolute top-3 left-3 w-10 h-10 sm:w-16 sm:h-16 text-[#e6c663] opacity-85 pointer-events-none" viewBox="0 0 100 100" fill="currentColor">
               <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
               <circle cx="20" cy="20" r="3" />
               <path d="M0,0 L35,0 C20,0 0,20 0,35 Z M0,0 L0,35 C0,20 20,0 35,0 Z" />
             </svg>
-            <svg className="absolute top-3 right-3 w-12 h-12 sm:w-20 sm:h-20 text-[#e6c663] opacity-85 pointer-events-none transform rotate-90" viewBox="0 0 100 100" fill="currentColor">
+            <svg className="absolute top-3 right-3 w-10 h-10 sm:w-16 sm:h-16 text-[#e6c663] opacity-85 pointer-events-none transform rotate-90" viewBox="0 0 100 100" fill="currentColor">
               <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
               <circle cx="20" cy="20" r="3" />
             </svg>
-            <svg className="absolute bottom-3 left-3 w-12 h-12 sm:w-20 sm:h-20 text-[#e6c663] opacity-85 pointer-events-none transform -rotate-90" viewBox="0 0 100 100" fill="currentColor">
+            <svg className="absolute bottom-3 left-3 w-10 h-10 sm:w-16 sm:h-16 text-[#e6c663] opacity-85 pointer-events-none transform -rotate-90" viewBox="0 0 100 100" fill="currentColor">
               <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
               <circle cx="20" cy="20" r="3" />
             </svg>
-            <svg className="absolute bottom-3 right-3 w-12 h-12 sm:w-20 sm:h-20 text-[#e6c663] opacity-85 pointer-events-none transform rotate-180" viewBox="0 0 100 100" fill="currentColor">
+            <svg className="absolute bottom-3 right-3 w-10 h-10 sm:w-16 sm:h-16 text-[#e6c663] opacity-85 pointer-events-none transform rotate-180" viewBox="0 0 100 100" fill="currentColor">
               <path d="M10,10 L40,10 C25,10 10,25 10,40 Z M15,15 L15,50 C15,30 30,15 50,15 L15,15 Z" />
               <circle cx="20" cy="20" r="3" />
             </svg>
 
             {/* Background Watermark Logo */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04]">
-              <span className="cert-font-cinzel text-[160px] font-black text-[#e6c663] tracking-widest uppercase">
+              <span className="cert-font-cinzel text-[140px] font-black text-[#e6c663] tracking-widest uppercase">
                 Ai
               </span>
             </div>
 
-            {/* HEADER SECTION: LOGO (TOP LEFT) & MAIN TITLE */}
-            <div className="relative z-10 flex items-center justify-between w-full pt-1 sm:pt-2">
+            {/* HEADER SECTION: LOGO (TOP LEFT) & MAIN TITLE (CENTERED EQUALLY) */}
+            <div className="relative z-10 flex items-center justify-between w-full pt-1 sm:pt-2 px-2 sm:px-6">
               {/* Prominent Gold Ai Clipzone Emblem Badge (Top Left) */}
-              <div className="flex items-center gap-2">
-                <div className="w-14 h-14 sm:w-18 sm:h-18 md:w-22 md:h-22 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-xl bg-gradient-to-br from-[#162550] via-[#0b1432] to-[#050918]">
-                  <div className="w-full h-full rounded-full border border-[#e6c663]/80 flex flex-col items-center justify-center text-center p-1 bg-[#0a122c] shadow-inner">
-                    <span
-                      className="cert-font-playfair font-black text-base sm:text-xl md:text-2xl leading-none"
-                      style={{ color: '#fef08a', textShadow: '0 1px 4px rgba(245, 158, 11, 0.5)' }}
-                    >
-                      Ai
-                    </span>
-                    <span
-                      className="text-[7px] sm:text-[9px] md:text-[10px] font-black tracking-widest uppercase leading-none mt-0.5"
-                      style={{ color: '#fcd34d', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-                    >
-                      CLIPZONE
-                    </span>
-                  </div>
+              <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-xl bg-gradient-to-br from-[#162550] via-[#0b1432] to-[#050918] shrink-0">
+                <div className="w-full h-full rounded-full border border-[#e6c663]/80 flex flex-col items-center justify-center text-center p-1 bg-[#0a122c] shadow-inner">
+                  <span
+                    className="cert-font-playfair font-black text-xs sm:text-lg md:text-xl leading-none"
+                    style={{ color: '#fef08a', textShadow: '0 1px 4px rgba(245, 158, 11, 0.5)' }}
+                  >
+                    Ai
+                  </span>
+                  <span
+                    className="text-[6px] sm:text-[8px] md:text-[9px] font-black tracking-widest uppercase leading-none mt-0.5"
+                    style={{ color: '#fcd34d', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                  >
+                    CLIPZONE
+                  </span>
                 </div>
               </div>
 
               {/* CENTER TITLE: CERTIFICATE OF ACHIEVEMENT */}
-              <div className="flex-1 text-center pr-12 sm:pr-16">
+              <div className="flex-1 text-center px-2">
                 <h1
-                  className="cert-font-cinzel text-2xl sm:text-4xl md:text-5xl font-black tracking-[0.15em] uppercase drop-shadow-md"
+                  className="cert-font-cinzel text-xl sm:text-3xl md:text-4xl font-black tracking-[0.15em] uppercase drop-shadow-md"
                   style={{ color: '#fef08a', textShadow: '0 2px 10px rgba(245, 158, 11, 0.35)' }}
                 >
                   CERTIFICATE
                 </h1>
                 <h2
-                  className="cert-font-cinzel text-[10px] sm:text-xs md:text-sm font-black tracking-[0.35em] uppercase mt-1"
+                  className="cert-font-cinzel text-[9px] sm:text-xs md:text-xs font-black tracking-[0.3em] uppercase mt-0.5 sm:mt-1"
                   style={{ color: '#fcd34d' }}
                 >
                   OF ACHIEVEMENT
                 </h2>
               </div>
+
+              {/* Right Spacer to Balance Emblem Width & Maintain Pure Center Title Alignment */}
+              <div className="w-12 sm:w-16 md:w-20 shrink-0" />
             </div>
 
             {/* CERTIFICATION BODY STATEMENT */}
-            <div className="relative z-10 my-auto py-2 sm:py-3">
+            <div className="relative z-10 my-auto py-1 sm:py-2 px-3 sm:px-8">
               <p className="font-serif italic text-slate-300 text-xs sm:text-sm md:text-base tracking-wide">
                 This is to certify that
               </p>
 
               {/* STUDENT CALLIGRAPHIC NAME */}
-              <div className="my-2 sm:my-3 relative block w-full max-w-full px-2 text-center">
+              <div className="my-1.5 sm:my-2 relative block w-full max-w-full px-4 text-center">
                 <h2
-                  className="cert-font-script text-3xl sm:text-5xl md:text-6xl font-bold tracking-wide leading-normal px-2 block mx-auto text-[#fef08a]"
+                  className="cert-font-script text-2xl sm:text-4xl md:text-5xl font-bold tracking-wide leading-normal px-2 block mx-auto text-[#fef08a]"
                   style={{
                     color: '#fef08a',
                     textShadow: '0 2px 12px rgba(245, 158, 11, 0.45)',
@@ -301,7 +285,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* ACHIEVEMENT STATEMENT */}
               <p
-                className="cert-font-cinzel text-[10px] sm:text-xs md:text-sm font-bold tracking-[0.2em] uppercase mt-2"
+                className="cert-font-cinzel text-[9px] sm:text-xs md:text-xs font-bold tracking-[0.2em] uppercase mt-1 sm:mt-2"
                 style={{ color: '#fcd34d' }}
               >
                 HAS SUCCESSFULLY COMPLETED
@@ -309,59 +293,59 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* COURSE TITLE */}
               <h3
-                className="font-sans font-black text-sm sm:text-xl md:text-2xl tracking-wider uppercase my-1.5 sm:my-2 leading-snug max-w-3xl mx-auto px-4"
+                className="font-sans font-black text-xs sm:text-lg md:text-xl tracking-wider uppercase my-1 sm:my-1.5 leading-snug max-w-2xl mx-auto px-4"
                 style={{ color: '#fef08a', textShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}
               >
                 {courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS'}
               </h3>
 
               {/* COURSE DESCRIPTION SUMMARY */}
-              <p className="text-slate-300/90 text-[9px] sm:text-xs md:text-sm font-normal max-w-2xl mx-auto leading-relaxed px-4 my-2">
+              <p className="text-slate-300/90 text-[8px] sm:text-xs md:text-xs font-normal max-w-xl mx-auto leading-relaxed px-4 my-1">
                 an advanced training in 30+ AI Tools covering AI Video Creation, AI Image Generation, AI Music & Song Creation, Graphic Design, Website Development, Professional Presentations, and other AI-powered digital skills.
               </p>
             </div>
 
             {/* BOTTOM SIGNATURES & ISSUE DATE SECTION */}
-            <div className="relative z-10 grid grid-cols-3 items-end text-center pt-2 sm:pt-4 border-t border-amber-500/20">
+            <div className="relative z-10 grid grid-cols-3 items-end text-center pt-2 sm:pt-3 border-t border-amber-500/20 px-2 sm:px-6 pb-1">
               {/* Left Signature: Director */}
               <div className="flex flex-col items-center">
-                <svg className="w-28 sm:w-36 h-10 sm:h-12 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-24 sm:w-32 h-8 sm:h-10 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   {/* Executive Director Signature - Smooth Calligraphic Flourish */}
                   <path d="M 16 38 C 12 22, 24 6, 40 10 C 52 13, 44 32, 26 35 C 18 37, 20 25, 36 22 C 54 18, 60 38, 74 30 C 82 25, 88 34, 98 28 C 106 24, 114 30, 126 26" strokeWidth="2.3" />
                   <path d="M 38 32 C 68 28, 102 26, 142 27" strokeWidth="1.8" />
                   <path d="M 58 37 Q 98 33, 132 34" strokeWidth="1.5" />
                   <circle cx="146" cy="27" r="1.8" fill="currentColor" />
                 </svg>
-                <div className="w-24 sm:w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
-                <span className="font-sans text-[10px] sm:text-xs font-bold text-slate-200">
+                <div className="w-20 sm:w-28 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
+                <span className="font-sans text-[9px] sm:text-xs font-bold text-slate-200">
                   Director
                 </span>
               </div>
 
               {/* Center: Date of Issue */}
               <div className="flex flex-col items-center justify-end pb-1">
-                <span className="font-sans text-[10px] sm:text-xs md:text-sm font-bold text-amber-300 tracking-wider">
+                <span className="font-sans text-[9px] sm:text-xs font-bold text-amber-300 tracking-wider">
                   Date of issue: {issueDate}
                 </span>
-                <span className="text-[9px] text-amber-400/60 font-mono mt-0.5">
+                <span className="text-[8px] sm:text-[9px] text-amber-400/60 font-mono mt-0.5">
                   Verify: {certId}
                 </span>
               </div>
 
               {/* Right Signature: Founder/CEO */}
               <div className="flex flex-col items-center">
-                <svg className="w-28 sm:w-36 h-10 sm:h-12 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-24 sm:w-32 h-8 sm:h-10 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   {/* Founder & CEO Signature - Expressive "Rajababu Mehta" Style Cursive Swirl */}
                   <path d="M 14 36 C 10 14, 28 6, 42 14 C 52 20, 36 38, 22 28 C 14 20, 34 12, 60 18 C 76 22, 88 12, 98 8 C 106 5, 112 18, 104 26 C 96 34, 114 28, 130 20 C 138 16, 144 22, 148 18" strokeWidth="2.3" />
                   <path d="M 28 26 C 58 20, 92 34, 124 24" strokeWidth="1.8" />
                   <path d="M 44 34 Q 88 28, 138 30" strokeWidth="1.5" />
                   <circle cx="152" cy="18" r="1.8" fill="currentColor" />
                 </svg>
-                <div className="w-24 sm:w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
-                <span className="font-sans text-[10px] sm:text-xs font-bold text-slate-200">
+                <div className="w-20 sm:w-28 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
+                <span className="font-sans text-[9px] sm:text-xs font-bold text-slate-200">
                   Founder/CEO
                 </span>
-                <span className="font-sans text-[9px] sm:text-[10px] text-slate-400 font-medium">
+                <span className="font-sans text-[8px] sm:text-[9px] text-slate-400 font-medium">
                   (AI Clipzone)
                 </span>
               </div>

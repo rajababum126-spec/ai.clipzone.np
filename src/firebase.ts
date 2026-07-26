@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase
@@ -9,8 +9,20 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 
-// Initialize Firestore with auto-detected long polling for smooth offline and online connection management
+// Initialize Firestore with force long polling for reliable sandbox & proxy network connections
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId);
+
+// Test connection and gracefully catch offline states
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'system', 'config'));
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('offline') || error.message.includes('unavailable'))) {
+      console.warn('Firestore operating in offline mode:', error.message);
+    }
+  }
+}
+testConnection();
 

@@ -279,12 +279,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               {/* HEADER SECTION: LOGO (TOP LEFT) & MAIN TITLE (CENTERED EQUALLY) */}
               <div className="relative z-10 flex items-center justify-between w-full px-4 pt-1">
                 {/* Prominent Official Gold Ai Clipzone Emblem Badge (Top Left) */}
-                <div className="w-28 shrink-0 flex items-center justify-start">
-                  <div className="w-24 h-24 rounded-full border-3 border-[#e6c663] p-2 flex items-center justify-center shadow-2xl bg-[#0a122c] shrink-0 overflow-hidden relative">
+                <div className="w-32 shrink-0 flex items-center justify-start">
+                  <div className="w-28 h-28 rounded-full border-3 border-[#e6c663] p-0.5 flex items-center justify-center shadow-2xl bg-[#0a122c] shrink-0 overflow-hidden relative">
                     <img 
                       src={LOGO_DATA_URL} 
                       alt="AI Clipzone Logo"
-                      className="w-full h-full object-contain filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.7)]"
+                      className="w-full h-full object-cover filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.7)]"
                     />
                   </div>
                 </div>
@@ -305,7 +305,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 </div>
 
                 {/* Right Spacer to Balance Emblem Width & Maintain Pure Center Title Alignment */}
-                <div className="w-28 shrink-0" />
+                <div className="w-32 shrink-0" />
               </div>
 
               {/* CERTIFICATION BODY STATEMENT */}

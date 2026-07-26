@@ -47,20 +47,17 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
       let dataUrl = '';
       try {
-        // Primary high-res PNG export with fontEmbedCSS bypassed to prevent cross-origin font CSS errors
+        // High-res PNG export preserving all custom calligraphic script fonts
         dataUrl = await toPng(node, {
           quality: 1.0,
           pixelRatio: 2.5,
           cacheBust: true,
-          fontEmbedCSS: '',
-          skipFonts: true,
         });
       } catch (firstErr) {
         console.warn('Initial toPng failed, trying fallback mode:', firstErr);
         dataUrl = await toPng(node, {
           quality: 0.95,
           pixelRatio: 2.0,
-          fontEmbedCSS: '',
         });
       }
 
@@ -202,6 +199,14 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               boxShadow: '0 25px 60px -15px rgba(0,0,0,0.9), inset 0 0 80px rgba(197,155,39,0.15)',
             }}
           >
+            {/* Embedded Font Definitions for Image Capture Canvas Engine */}
+            <style>{`
+              @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Great+Vibes&family=Playfair+Display:ital,wght@0,600;0,800;1,700&display=swap');
+              .cert-font-script { font-family: 'Great Vibes', 'Playfair Display', Georgia, cursive, serif !important; }
+              .cert-font-cinzel { font-family: 'Cinzel', 'Playfair Display', Georgia, serif !important; }
+              .cert-font-playfair { font-family: 'Playfair Display', Georgia, serif !important; }
+            `}</style>
+
             {/* Outer Luxury Metallic Border Multi-Layers */}
             <div className="absolute inset-2 sm:inset-3 border-2 border-[#e6c663] rounded-lg pointer-events-none opacity-90" />
             <div className="absolute inset-3 sm:inset-4 border border-[#8a6a18] rounded-md pointer-events-none opacity-80" />
@@ -289,6 +294,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 <h2
                   className="cert-font-script text-2xl sm:text-4xl md:text-5xl font-bold tracking-wide leading-normal px-2 block mx-auto text-[#fef08a]"
                   style={{
+                    fontFamily: "'Great Vibes', 'Playfair Display', Georgia, cursive, serif",
                     color: '#fef08a',
                     textShadow: '0 2px 12px rgba(245, 158, 11, 0.45)',
                   }}

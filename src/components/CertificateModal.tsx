@@ -219,20 +219,29 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
             {/* HEADER SECTION: LOGO (TOP LEFT) & MAIN TITLE (CENTERED EQUALLY) */}
             <div className="relative z-10 flex items-center justify-between w-full pt-1 sm:pt-2 px-2 sm:px-6">
-              {/* Prominent Gold Ai Clipzone Emblem Badge (Top Left) */}
-              <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-xl bg-gradient-to-br from-[#162550] via-[#0b1432] to-[#050918] shrink-0">
-                <div className="w-full h-full rounded-full border border-[#e6c663]/80 flex flex-col items-center justify-center text-center p-1 bg-[#0a122c] shadow-inner">
+              {/* Prominent Official Gold Ai Clipzone Emblem Badge (Top Left) */}
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-xl bg-gradient-to-br from-[#162550] via-[#0b1432] to-[#050918] shrink-0 relative group">
+                  <div className="w-full h-full rounded-full border border-[#e6c663]/80 flex items-center justify-center p-1 bg-[#0a122c] shadow-inner overflow-hidden">
+                    <img 
+                      src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhVG6Fh_bUev_FEchbwGJsmVz3s92FK-6lTlHj-sbYBguGhsYp8O3_J7c_SOfvnXCSWWHjLjqoeorMTcWQeac1CbhIaYtgfmHrYz44urYRSjlmrrNPoe9bMVCvcoTllNI4JaajsRwwMmuyvpUpaFs3r3UJs-4d6UuW0AmES38d4115LxC4Vsx76Wf6KW4v8/s1600/12844.png" 
+                      alt="AI Clipzone Logo"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-contain filter drop-shadow-[0_2px_4px_rgba(245,158,11,0.5)]"
+                    />
+                  </div>
+                </div>
+                <div className="hidden sm:flex flex-col text-left">
                   <span
-                    className="cert-font-playfair font-black text-xs sm:text-lg md:text-xl leading-none"
-                    style={{ color: '#fef08a', textShadow: '0 1px 4px rgba(245, 158, 11, 0.5)' }}
+                    className="cert-font-playfair font-black text-sm md:text-base leading-tight tracking-wider"
+                    style={{ color: '#fef08a', textShadow: '0 1px 4px rgba(245, 158, 11, 0.4)' }}
                   >
-                    Ai
+                    AI CLIPZONE
                   </span>
                   <span
-                    className="text-[6px] sm:text-[8px] md:text-[9px] font-black tracking-widest uppercase leading-none mt-0.5"
-                    style={{ color: '#fcd34d', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                    className="text-[8px] md:text-[9px] font-black tracking-[0.2em] uppercase text-amber-400/90 leading-none mt-0.5"
                   >
-                    CLIPZONE
+                    NEPAL 🇳🇵
                   </span>
                 </div>
               </div>

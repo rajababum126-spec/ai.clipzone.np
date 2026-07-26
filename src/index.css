@@ -5,3 +5,14 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+.cert-font-script {
+  font-family: 'Great Vibes', 'Playfair Display', Georgia, cursive, serif !important;
+}
+.cert-font-cinzel {
+  font-family: 'Cinzel', 'Playfair Display', Georgia, serif !important;
+}
+.cert-font-playfair {
+  font-family: 'Playfair Display', Georgia, serif !important;
+}
+

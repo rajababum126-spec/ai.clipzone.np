@@ -42,7 +42,8 @@ import {
   Download,
   Smartphone,
   Share2,
-  Award
+  Award,
+  RotateCw
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -912,6 +913,7 @@ export default function App() {
   } | null>(null);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState<boolean>(false);
   const [isForceLandscape, setIsForceLandscape] = useState<boolean>(false);
+  const [videoRotation, setVideoRotation] = useState<number>(0); // 0, 90, 180, 270 degrees
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -919,6 +921,7 @@ export default function App() {
       setIsNativeFullscreen(isFs);
       if (!isFs) {
         setIsForceLandscape(false);
+        setVideoRotation(0);
       }
     };
     document.addEventListener('fullscreenchange', handleFsChange);
@@ -928,8 +931,74 @@ export default function App() {
   useEffect(() => {
     if (!fullscreenVideo) {
       setIsForceLandscape(false);
+      setVideoRotation(0);
     }
   }, [fullscreenVideo]);
+
+  const handleRotateVideo = () => {
+    const angles = [0, 90, 180, 270];
+    const currentDeg = videoRotation || (isForceLandscape ? 90 : 0);
+    const currentIndex = angles.indexOf(currentDeg);
+    const nextDeg = angles[(currentIndex + 1) % angles.length];
+    setVideoRotation(nextDeg);
+    if (nextDeg === 0) {
+      setIsForceLandscape(false);
+    } else {
+      setIsForceLandscape(true);
+    }
+    showToast(`भिडियो ${nextDeg}° मा घुमाइयो! (Video rotated to ${nextDeg}°)`, 'info');
+  };
+
+  const setSpecificRotation = (deg: number) => {
+    setVideoRotation(deg);
+    if (deg === 0) {
+      setIsForceLandscape(false);
+    } else {
+      setIsForceLandscape(true);
+    }
+    showToast(`भिडियो Rotation: ${deg}°`, 'info');
+  };
+
+  const getRotationStyle = () => {
+    const currentDeg = videoRotation || (isForceLandscape ? 90 : 0);
+    if (currentDeg === 90) {
+      return {
+        width: '100vh',
+        height: '100vw',
+        position: 'fixed' as const,
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%) rotate(90deg)',
+        zIndex: 10000,
+        backgroundColor: '#000'
+      };
+    }
+    if (currentDeg === 180) {
+      return {
+        width: '100vw',
+        height: '100vh',
+        position: 'fixed' as const,
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%) rotate(180deg)',
+        zIndex: 10000,
+        backgroundColor: '#000'
+      };
+    }
+    if (currentDeg === 270) {
+      return {
+        width: '100vh',
+        height: '100vw',
+        position: 'fixed' as const,
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%) rotate(270deg)',
+        zIndex: 10000,
+        backgroundColor: '#000'
+      };
+    }
+    return {};
+  };
 
   const toggleFullscreenMode = async () => {
     try {
@@ -944,12 +1013,14 @@ export default function App() {
         // Auto rotate 90deg horizontally if on portrait screen / mobile view
         if (window.innerHeight > window.innerWidth || window.innerWidth < 768) {
           setIsForceLandscape(true);
+          setVideoRotation(90);
         }
       } else {
         if (document.exitFullscreen) {
           await document.exitFullscreen().catch(() => {});
         }
         setIsForceLandscape(false);
+        setVideoRotation(0);
       }
     } catch (err) {
       console.log('Fullscreen error:', err);
@@ -4231,7 +4302,34 @@ export default function App() {
                   {fullscreenVideo.title} (Lecture {fullscreenVideo.idx + 1})
                 </h4>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Rotate Video 360 Cycle Button */}
+                <button
+                  onClick={handleRotateVideo}
+                  className="bg-purple-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-2.5 py-2 md:px-3.5 md:py-2.5 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg active:scale-95"
+                  title="Rotate Video Screen (0°, 90°, 180°, 270°)"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>Rotate 🔄 ({videoRotation || (isForceLandscape ? 90 : 0)}°)</span>
+                </button>
+
+                {/* Quick Angle Badges */}
+                <div className="hidden sm:flex items-center bg-slate-900/90 rounded-xl p-0.5 border border-slate-800">
+                  {[0, 90, 180, 270].map((deg) => (
+                    <button
+                      key={deg}
+                      onClick={() => setSpecificRotation(deg)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-black transition cursor-pointer ${
+                        (videoRotation === deg || (deg === 90 && isForceLandscape && videoRotation === 0))
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {deg}°
+                    </button>
+                  ))}
+                </div>
+
                 <button
                   onClick={toggleFullscreenMode}
                   className="bg-slate-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg"
@@ -4245,6 +4343,8 @@ export default function App() {
                     if (document.fullscreenElement && document.exitFullscreen) {
                       document.exitFullscreen().catch(() => {});
                     }
+                    setVideoRotation(0);
+                    setIsForceLandscape(false);
                     setFullscreenVideo(null);
                   }}
                   className="bg-slate-900/80 hover:bg-rose-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1 font-sans shadow-lg"
@@ -4255,23 +4355,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* Embed Video Iframe Container with Horizontal Mobile Rotation Support */}
+            {/* Embed Video Iframe Container with Multi-Direction Rotation Support */}
             <div 
               className={`bg-black flex items-center justify-center transition-all duration-300 ${
-                isForceLandscape 
-                  ? 'fixed inset-0 z-[10000] w-[100vh] h-[100vw]' 
+                (isForceLandscape || videoRotation !== 0)
+                  ? 'fixed inset-0 z-[10000]' 
                   : 'relative w-full h-full flex-1 overflow-hidden'
               }`}
-              style={isForceLandscape ? {
-                width: '100vh',
-                height: '100vw',
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%) rotate(90deg)',
-                zIndex: 10000,
-                backgroundColor: '#000'
-              } : {}}
+              style={getRotationStyle()}
             >
               {/* Context guard to prevent direct saving */}
               <div 
@@ -4279,26 +4370,57 @@ export default function App() {
                 className="absolute inset-0 z-50 pointer-events-none"
               />
 
-              {/* Floating Horizontal Fullscreen Toggle inside Video area */}
-              <div className="absolute top-4 right-4 z-[60] flex items-center gap-1.5">
+              {/* Floating Horizontal & Rotation Control Bar inside Video area */}
+              <div className="absolute top-4 right-4 z-[60] flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md p-1 rounded-2xl border border-slate-800 shadow-2xl">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isForceLandscape) {
+                    handleRotateVideo();
+                  }}
+                  className="bg-purple-700 hover:bg-purple-600 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
+                  title="Rotate Video Screen (0°, 90°, 180°, 270°)"
+                >
+                  <RotateCw className="w-3 h-3" />
+                  <span>Rotate 🔄 ({videoRotation || (isForceLandscape ? 90 : 0)}°)</span>
+                </button>
+
+                {[0, 90, 180, 270].map((deg) => (
+                  <button
+                    key={deg}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSpecificRotation(deg);
+                    }}
+                    className={`px-2 py-1 rounded-lg text-[9px] md:text-[10px] font-black transition cursor-pointer ${
+                      (videoRotation === deg || (deg === 90 && isForceLandscape && videoRotation === 0))
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    {deg}°
+                  </button>
+                ))}
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isForceLandscape && videoRotation === 0) {
                       setIsForceLandscape(true);
+                      setVideoRotation(90);
                       toggleFullscreenMode();
                     } else {
                       setIsForceLandscape(false);
+                      setVideoRotation(0);
                       if (document.fullscreenElement && document.exitFullscreen) {
                         document.exitFullscreen().catch(() => {});
                       }
                     }
                   }}
-                  className="bg-slate-950/90 hover:bg-purple-600 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 shadow-lg active:scale-95"
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-slate-700 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
                   title="Toggle Fullscreen Horizontal Mode"
                 >
-                  {(isNativeFullscreen || isForceLandscape) ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
-                  <span>{(isNativeFullscreen || isForceLandscape) ? 'Normal View' : 'Horizontal Fullscreen ⛶'}</span>
+                  {(isNativeFullscreen || isForceLandscape || videoRotation !== 0) ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                  <span>{(isNativeFullscreen || isForceLandscape || videoRotation !== 0) ? 'Reset View' : 'Horizontal ⛶'}</span>
                 </button>
               </div>
 

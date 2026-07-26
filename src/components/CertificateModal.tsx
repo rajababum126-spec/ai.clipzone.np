@@ -33,25 +33,32 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       const node = document.getElementById('certificate-print-area');
       if (!node) return;
 
+      // Ensure document fonts are fully loaded before capturing
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+
       // Save existing inline style values
       const origWidth = node.style.width;
       const origMinWidth = node.style.minWidth;
       const origMaxWidth = node.style.maxWidth;
 
-      // Ensure node is rendered at standard 880px landscape box during capture
+      // Temporarily set exact landscape dimensions on the visible node
       node.style.width = '880px';
       node.style.minWidth = '880px';
       node.style.maxWidth = '880px';
 
-      // Capture high-resolution PNG (2640px width at 3x pixelRatio)
+      // Brief delay to allow browser to calculate layout
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
       const dataUrl = await toPng(node, {
         quality: 1.0,
-        pixelRatio: 3,
+        pixelRatio: 2.5,
         cacheBust: true,
-        fontEmbedCSS: '',
+        fontEmbedCSS: '', // Disables fetching external webfonts which causes CORS/blank canvas
       });
 
-      // Restore original responsive inline styles immediately
+      // Restore original inline styles
       node.style.width = origWidth;
       node.style.minWidth = origMinWidth;
       node.style.maxWidth = origMaxWidth;
@@ -63,7 +70,6 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       link.click();
     } catch (err) {
       console.error('Download error:', err);
-      // Fallback to print if html-to-image fails
       window.print();
     } finally {
       setIsDownloading(false);
@@ -212,22 +218,28 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
             {/* Background Watermark Logo */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04]">
-              <span className="font-['Cinzel'] text-[160px] font-black text-[#e6c663] tracking-widest uppercase">
+              <span className="cert-font-cinzel text-[160px] font-black text-[#e6c663] tracking-widest uppercase">
                 Ai
               </span>
             </div>
 
             {/* HEADER SECTION: LOGO (TOP LEFT) & MAIN TITLE */}
-            <div className="relative z-10 flex items-start justify-between w-full pt-1 sm:pt-2">
-              {/* Gold Circular Ai Clipzone Badge (Top Left) */}
+            <div className="relative z-10 flex items-center justify-between w-full pt-1 sm:pt-2">
+              {/* Prominent Gold Ai Clipzone Emblem Badge (Top Left) */}
               <div className="flex items-center gap-2">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-lg bg-gradient-to-br from-[#121e42] to-[#080e26]">
-                  <div className="w-full h-full rounded-full border border-[#ca8a04]/60 flex flex-col items-center justify-center text-center p-1 bg-[#09112a]">
-                    <span className="font-['Playfair_Display'] font-black text-sm sm:text-lg md:text-xl text-amber-200 leading-none">
+                <div className="w-14 h-14 sm:w-18 sm:h-18 md:w-22 md:h-22 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-xl bg-gradient-to-br from-[#162550] via-[#0b1432] to-[#050918]">
+                  <div className="w-full h-full rounded-full border border-[#e6c663]/80 flex flex-col items-center justify-center text-center p-1 bg-[#0a122c] shadow-inner">
+                    <span
+                      className="cert-font-playfair font-black text-base sm:text-xl md:text-2xl leading-none"
+                      style={{ color: '#fef08a', textShadow: '0 1px 4px rgba(245, 158, 11, 0.5)' }}
+                    >
                       Ai
                     </span>
-                    <span className="text-[7px] sm:text-[9px] md:text-[10px] font-extrabold text-amber-300 tracking-wider uppercase leading-none mt-0.5">
-                      Clipzone
+                    <span
+                      className="text-[7px] sm:text-[9px] md:text-[10px] font-black tracking-widest uppercase leading-none mt-0.5"
+                      style={{ color: '#fcd34d', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                    >
+                      CLIPZONE
                     </span>
                   </div>
                 </div>
@@ -236,28 +248,34 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               {/* CENTER TITLE: CERTIFICATE OF ACHIEVEMENT */}
               <div className="flex-1 text-center pr-12 sm:pr-16">
                 <h1
-                  className="font-['Cinzel'] text-2xl sm:text-4xl md:text-5xl font-black text-[#fef08a] bg-clip-text bg-gradient-to-r from-[#fffbeb] via-[#fef08a] to-[#d97706] tracking-[0.15em] uppercase drop-shadow-md"
-                  style={{ color: '#fef08a' }}
+                  className="cert-font-cinzel text-2xl sm:text-4xl md:text-5xl font-black tracking-[0.15em] uppercase drop-shadow-md"
+                  style={{ color: '#fef08a', textShadow: '0 2px 10px rgba(245, 158, 11, 0.35)' }}
                 >
                   CERTIFICATE
                 </h1>
-                <h2 className="font-['Cinzel'] text-[10px] sm:text-xs md:text-sm font-black text-amber-300/90 tracking-[0.35em] uppercase mt-1">
+                <h2
+                  className="cert-font-cinzel text-[10px] sm:text-xs md:text-sm font-black tracking-[0.35em] uppercase mt-1"
+                  style={{ color: '#fcd34d' }}
+                >
                   OF ACHIEVEMENT
                 </h2>
               </div>
             </div>
 
             {/* CERTIFICATION BODY STATEMENT */}
-            <div className="relative z-10 my-auto py-2 sm:py-4">
+            <div className="relative z-10 my-auto py-2 sm:py-3">
               <p className="font-serif italic text-slate-300 text-xs sm:text-sm md:text-base tracking-wide">
                 This is to certify that
               </p>
 
               {/* STUDENT CALLIGRAPHIC NAME */}
-              <div className="my-2 sm:my-3 relative inline-block max-w-full px-4">
+              <div className="my-2 sm:my-3 relative block w-full max-w-full px-2 text-center">
                 <h2
-                  className="font-['Great_Vibes'] text-3xl sm:text-5xl md:text-6xl text-[#fef08a] bg-clip-text bg-gradient-to-r from-[#ffffff] via-[#fef08a] to-[#eab308] font-bold tracking-wide drop-shadow-lg leading-tight px-2"
-                  style={{ color: '#fef08a' }}
+                  className="cert-font-script text-3xl sm:text-5xl md:text-6xl font-bold tracking-wide leading-normal px-2 block mx-auto text-[#fef08a]"
+                  style={{
+                    color: '#fef08a',
+                    textShadow: '0 2px 12px rgba(245, 158, 11, 0.45)',
+                  }}
                 >
                   {studentName}
                 </h2>
@@ -271,14 +289,17 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </div>
 
               {/* ACHIEVEMENT STATEMENT */}
-              <p className="font-['Cinzel'] text-[10px] sm:text-xs md:text-sm font-bold text-amber-300 tracking-[0.2em] uppercase mt-2">
+              <p
+                className="cert-font-cinzel text-[10px] sm:text-xs md:text-sm font-bold tracking-[0.2em] uppercase mt-2"
+                style={{ color: '#fcd34d' }}
+              >
                 HAS SUCCESSFULLY COMPLETED
               </p>
 
               {/* COURSE TITLE */}
               <h3
-                className="font-sans font-black text-sm sm:text-xl md:text-2xl text-[#fef08a] bg-clip-text bg-gradient-to-r from-[#ffffff] via-[#fef08a] to-[#f59e0b] tracking-wider uppercase my-1.5 sm:my-2 leading-snug max-w-3xl mx-auto px-4"
-                style={{ color: '#fef08a' }}
+                className="font-sans font-black text-sm sm:text-xl md:text-2xl tracking-wider uppercase my-1.5 sm:my-2 leading-snug max-w-3xl mx-auto px-4"
+                style={{ color: '#fef08a', textShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}
               >
                 {courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS'}
               </h3>

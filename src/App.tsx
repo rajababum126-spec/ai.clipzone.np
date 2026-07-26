@@ -1357,8 +1357,8 @@ export default function App() {
   // Render QR Code inside canvas once QR modal opens
   useEffect(() => {
     if (showQrModal && selectedCourse && qrCanvasRef.current) {
-      // payload from original code
-      const qrPayload = "00020101021126350011fonepay.com071622226100158730565204527153035245802NP5915Prakash Store 16012Pokhariya MC62110707162568663048986";
+      // eSewa QR payload for Ayush Chaurasiya
+      const qrPayload = JSON.stringify({ eSewa_id: "9763323268", name: "Ayush Chaurasiya" });
       QRCode.toCanvas(
         qrCanvasRef.current,
         qrPayload,
@@ -1431,10 +1431,10 @@ export default function App() {
 
     // Payment / How to buy / eSewa
     if (q.includes('payment') || q.includes('तिर्ने') || q.includes('किन्ने') || q.includes('buy') || q.includes('esewa') || q.includes('khalti') || q.includes('qr') || q.includes('pay') || q.includes('purchase')) {
-      return `भुक्तानी गर्न अत्यन्तै सजिलो छ! तपाईंले <strong>eSewa, Khalti, IME Pay, वा Bank Transfer</strong> मार्फत FonePay QR स्क्यान गरेर तिर्न सक्नुहुन्छ। <br/><br/>
+      return `भुक्तानी गर्न अत्यन्तै सजिलो छ! तपाईंले <strong>eSewa (ID: 9763323268 - Ayush Chaurasiya) वा Bank Transfer</strong> मार्फत QR स्क्यान गरेर तिर्न सक्नुहुन्छ। <br/><br/>
       <strong>प्रक्रिया:</strong><br/>
       १. कोर्ष सेक्सनमा गएर आफूलाई मनपर्ने कोर्षको <strong>"Pay & Join Now"</strong> बटन थिच्नुहोस्।<br/>
-      २. त्यहाँ देखाइएको FonePay QR स्क्यान गरी तोकिएको शुल्क भुक्तानी गर्नुहोस्।<br/>
+      २. त्यहाँ देखाइएको QR स्क्यान गरी eSewa वा Mobile Banking बाट तोकिएको शुल्क भुक्तानी गर्नुहोस्।<br/>
       ३. भुक्तानी गरिसकेपछि स्क्रीनसट हाम्रो आधिकारिक <strong>WhatsApp (976-3323268)</strong> मा पठाउनुहोस् र कोर्षको तत्काल पहुँच पाउनुहोस्।`;
     }
 
@@ -3093,7 +3093,7 @@ export default function App() {
                     onClick={handleOpenFonePayQR}
                     className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold py-4 px-6 rounded-2xl text-center shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Khalti)</span>
+                    <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)</span>
                   </button>
                 </div>
               </motion.div>
@@ -3429,7 +3429,7 @@ export default function App() {
               className="bg-white max-w-sm w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 text-center border border-slate-100"
             >
               <h3 className="text-lg font-black text-slate-900">
-                Scan to Pay (eSewa / Khalti / Bank App)
+                Scan to Pay (eSewa / Bank App)
               </h3>
               
               <p className="text-xs font-semibold text-slate-500 mt-1">
@@ -3441,12 +3441,25 @@ export default function App() {
               </p>
 
               {/* QR Canvas Container */}
-              <div className="my-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl inline-block shadow-inner">
-                <canvas ref={qrCanvasRef} className="mx-auto" />
+              <div className="my-5 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl w-full shadow-inner text-center">
+                <canvas ref={qrCanvasRef} className="mx-auto rounded-lg shadow-xs" />
+                
+                {/* Account Details directly under QR */}
+                <div className="mt-4 pt-3 border-t border-slate-200 text-center">
+                  <span className="inline-block text-[11px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-100/80 px-3 py-0.5 rounded-full border border-purple-200/80">
+                    eSewa Official Account
+                  </span>
+                  <h4 className="text-base font-black text-slate-900 mt-2 flex items-center justify-center gap-1.5">
+                    👤 Ayush Chaurasiya
+                  </h4>
+                  <p className="text-xs font-extrabold text-slate-700 mt-1 flex items-center justify-center gap-1">
+                    📱 eSewa ID: <span className="font-mono text-purple-900 bg-purple-100/90 px-2 py-0.5 rounded text-xs select-all font-bold">9763323268</span>
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200/50 text-xs text-amber-800 font-bold leading-normal mb-6">
-                📌 Ai Clipzone • QR स्क्यान गरी तोकिएको रकम भुक्तानी गर्नुहोस् र स्क्रीनसट हामीलाई WhatsApp मा पठाउनुहोस्।
+              <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200/60 text-xs text-amber-900 font-bold leading-normal mb-6 text-left">
+                📌 <strong>भुक्तानी निर्देशन:</strong> QR स्क्यान गरी वा eSewa ID <span className="font-mono text-purple-900 font-black underline">9763323268</span> (Ayush Chaurasiya) मा रकम पठाएर स्क्रीनसट WhatsApp मा पठाउनुहोस्।
               </div>
 
               {/* Action buttons */}

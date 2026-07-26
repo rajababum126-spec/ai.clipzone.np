@@ -194,7 +194,7 @@ export const FAQS: FAQItem[] = [
   },
   {
     question: "Payment कसरी गर्ने?",
-    answer: "WhatsApp मा सम्पर्क गर्नुहोस्। eSewa, Khalti, IME Pay, Bank Transfer सबै विकल्प उपलब्ध छन्।"
+    answer: "WhatsApp वा QR स्क्यान गरी eSewa (ID: 9763323268 - Ayush Chaurasiya) वा Bank Transfer मार्फत सजिलै भुक्तानी गर्न सक्नुहुन्छ।"
   },
   {
     question: "Course भाषा के हो?",

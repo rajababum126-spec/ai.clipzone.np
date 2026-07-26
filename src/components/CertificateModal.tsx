@@ -360,11 +360,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               <div className="relative z-10 grid grid-cols-3 items-end text-center pt-2 border-t border-amber-500/20 px-6 pb-1">
                 {/* Left Signature: Director */}
                 <div className="flex flex-col items-center">
-                  <svg className="w-36 h-11 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M 16 38 C 12 22, 24 6, 40 10 C 52 13, 44 32, 26 35 C 18 37, 20 25, 36 22 C 54 18, 60 38, 74 30 C 82 25, 88 34, 98 28 C 106 24, 114 30, 126 26" strokeWidth="2.3" />
-                    <path d="M 38 32 C 68 28, 102 26, 142 27" strokeWidth="1.8" />
-                    <path d="M 58 37 Q 98 33, 132 34" strokeWidth="1.5" />
-                    <circle cx="146" cy="27" r="1.8" fill="currentColor" />
+                  <svg className="w-40 h-12 text-[#fef08a] drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)]" viewBox="0 0 180 55" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                    {/* Calligraphic Executive Director Signature */}
+                    <path d="M 22 42 C 14 38, 12 12, 28 8 C 42 5, 40 38, 25 44 C 18 47, 24 24, 46 20 C 62 17, 56 36, 72 28 C 80 24, 84 32, 96 26 C 104 22, 112 30, 128 24" strokeWidth="2.4" />
+                    <path d="M 120 18 Q 138 12, 148 22 Q 132 38, 108 42 C 80 47, 130 42, 162 40" strokeWidth="1.8" />
+                    <circle cx="166" cy="39" r="1.8" fill="currentColor" />
                   </svg>
                   <div className="w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
                   <span className="font-sans text-sm font-bold text-slate-200">
@@ -384,11 +384,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
                 {/* Right Signature: Founder/CEO */}
                 <div className="flex flex-col items-center">
-                  <svg className="w-36 h-11 text-amber-200 drop-shadow-[0_2px_6px_rgba(245,158,11,0.25)]" viewBox="0 0 160 50" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M 14 36 C 10 14, 28 6, 42 14 C 52 20, 36 38, 22 28 C 14 20, 34 12, 60 18 C 76 22, 88 12, 104 26 C 96 34, 114 28, 130 20 C 138 16, 144 22, 148 18" strokeWidth="2.3" />
-                    <path d="M 28 26 C 58 20, 92 34, 124 24" strokeWidth="1.8" />
-                    <path d="M 44 34 Q 88 28, 138 30" strokeWidth="1.5" />
-                    <circle cx="152" cy="18" r="1.8" fill="currentColor" />
+                  <svg className="w-40 h-12 text-[#fef08a] drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)]" viewBox="0 0 180 55" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                    {/* Elegant CEO Loop & Underline Flourish */}
+                    <path d="M 18 45 C 10 18, 30 4, 48 10 C 62 15, 42 42, 28 32 C 18 24, 38 10, 68 18 C 88 23, 80 38, 98 28 C 110 21, 118 32, 134 22 C 144 16, 150 24, 158 20" strokeWidth="2.5" />
+                    <path d="M 32 36 C 65 28, 110 26, 152 32 C 165 34, 172 30, 166 26 C 158 21, 145 28, 135 34 C 120 42, 148 44, 170 42" strokeWidth="1.7" />
+                    <circle cx="174" cy="41" r="1.8" fill="currentColor" />
                   </svg>
                   <div className="w-32 h-[1px] bg-gradient-to-r from-transparent via-amber-400 to-transparent my-1" />
                   <span className="font-sans text-sm font-bold text-slate-200">

@@ -39,30 +39,46 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         await document.fonts.ready.catch(() => {});
       }
 
-      // Save original style
+      // Save original style values
       const origBoxShadow = node.style.boxShadow;
+      const origWidth = node.style.width;
+      const origMinWidth = node.style.minWidth;
+      const origMaxWidth = node.style.maxWidth;
+      const origHeight = node.style.height;
 
-      // Temporarily strip outer drop shadow so image has no extra outer margin around the border
+      // Temporarily set exact HD landscape dimensions during capture for crystal clear image on all devices (mobile & desktop)
       node.style.boxShadow = 'none';
+      node.style.width = '1200px';
+      node.style.minWidth = '1200px';
+      node.style.maxWidth = '1200px';
+
+      // Brief delay to allow layout calculation
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       let dataUrl = '';
       try {
-        // High-res PNG export preserving all custom calligraphic script fonts
+        // High-res PNG export producing 3000px wide ultra-sharp image
         dataUrl = await toPng(node, {
           quality: 1.0,
           pixelRatio: 2.5,
           cacheBust: true,
+          width: 1200,
         });
       } catch (firstErr) {
         console.warn('Initial toPng failed, trying fallback mode:', firstErr);
         dataUrl = await toPng(node, {
           quality: 0.95,
           pixelRatio: 2.0,
+          width: 1200,
         });
       }
 
-      // Restore box shadow
+      // Restore original element styles
       node.style.boxShadow = origBoxShadow;
+      node.style.width = origWidth;
+      node.style.minWidth = origMinWidth;
+      node.style.maxWidth = origMaxWidth;
+      node.style.height = origHeight;
 
       if (dataUrl) {
         const link = document.createElement('a');
@@ -75,7 +91,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       }
     } catch (err) {
       console.error('Download error:', err);
-      // Fallback smoothly to browser print/save PDF if PNG canvas is strictly blocked by browser
+      // Fallback smoothly to browser print/save PDF if PNG canvas is strictly blocked
       window.print();
     } finally {
       setIsDownloading(false);
@@ -189,11 +205,15 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           </div>
         </div>
 
-        {/* MAIN CERTIFICATE CANVAS BOX (Fits cleanly without force scrolling on desktop, scrollable on mobile) */}
-        <div className="w-full flex-1 flex items-center justify-center my-auto py-2 px-1 overflow-x-auto">
+        {/* MAIN CERTIFICATE CANVAS BOX (Scrolls cleanly on mobile to preserve full HD landscape typography, centered on desktop) */}
+        <div className="w-full flex-1 flex flex-col items-center justify-center my-auto py-2 px-1 overflow-x-auto scrollbar-thin scrollbar-thumb-amber-500/30">
+          <p className="sm:hidden text-[11px] font-medium text-amber-300/90 text-center mb-2 flex items-center gap-1 bg-amber-950/60 px-3 py-1 rounded-full border border-amber-500/30 shrink-0">
+            <span>👈 Scroll horizontally to preview full HD certificate 👉</span>
+          </p>
+
           <div
             id="certificate-print-area"
-            className="relative w-full max-w-[880px] min-w-[320px] sm:min-w-[650px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-6 sm:p-10 md:p-12 shadow-2xl overflow-hidden border-2 sm:border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans shrink-0"
+            className="relative w-full max-w-[880px] min-w-[620px] sm:min-w-[680px] aspect-[1.414/1] bg-[#060b1e] rounded-xl sm:rounded-2xl p-6 sm:p-10 md:p-12 shadow-2xl overflow-hidden border-3 sm:border-4 border-[#c59b27] flex flex-col justify-between text-center select-none font-sans shrink-0 my-auto"
             style={{
               backgroundImage: 'radial-gradient(circle at center, #0f1c42 0%, #060b1e 80%)',
               boxShadow: '0 25px 60px -15px rgba(0,0,0,0.9), inset 0 0 80px rgba(197,155,39,0.15)',
@@ -266,13 +286,13 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               {/* CENTER TITLE: CERTIFICATE OF ACHIEVEMENT */}
               <div className="flex-1 text-center px-2">
                 <h1
-                  className="cert-font-cinzel text-xl sm:text-3xl md:text-4xl font-black tracking-[0.15em] uppercase drop-shadow-md"
+                  className="cert-font-cinzel text-2xl sm:text-3xl md:text-4xl font-black tracking-[0.15em] uppercase drop-shadow-md"
                   style={{ color: '#fef08a', textShadow: '0 2px 10px rgba(245, 158, 11, 0.35)' }}
                 >
                   CERTIFICATE
                 </h1>
                 <h2
-                  className="cert-font-cinzel text-[9px] sm:text-xs md:text-xs font-black tracking-[0.3em] uppercase mt-0.5 sm:mt-1"
+                  className="cert-font-cinzel text-[10px] sm:text-xs md:text-sm font-black tracking-[0.3em] uppercase mt-0.5 sm:mt-1"
                   style={{ color: '#fcd34d' }}
                 >
                   OF ACHIEVEMENT
@@ -292,7 +312,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               {/* STUDENT CALLIGRAPHIC NAME */}
               <div className="my-1.5 sm:my-2 relative block w-full max-w-full px-4 text-center">
                 <h2
-                  className="cert-font-script text-2xl sm:text-4xl md:text-5xl font-bold tracking-wide leading-normal px-2 block mx-auto text-[#fef08a]"
+                  className="cert-font-script text-3xl sm:text-4xl md:text-5xl font-bold tracking-wide leading-normal px-2 block mx-auto text-[#fef08a]"
                   style={{
                     fontFamily: "'Great Vibes', 'Playfair Display', Georgia, cursive, serif",
                     color: '#fef08a',
@@ -312,7 +332,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* ACHIEVEMENT STATEMENT */}
               <p
-                className="cert-font-cinzel text-[9px] sm:text-xs md:text-xs font-bold tracking-[0.2em] uppercase mt-1 sm:mt-2"
+                className="cert-font-cinzel text-[10px] sm:text-xs md:text-sm font-bold tracking-[0.2em] uppercase mt-1 sm:mt-2"
                 style={{ color: '#fcd34d' }}
               >
                 HAS SUCCESSFULLY COMPLETED
@@ -320,14 +340,14 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
               {/* COURSE TITLE */}
               <h3
-                className="font-sans font-black text-xs sm:text-lg md:text-xl tracking-wider uppercase my-1 sm:my-1.5 leading-snug max-w-2xl mx-auto px-4"
+                className="font-sans font-black text-sm sm:text-lg md:text-xl tracking-wider uppercase my-1 sm:my-1.5 leading-snug max-w-2xl mx-auto px-4"
                 style={{ color: '#fef08a', textShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}
               >
                 {courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS'}
               </h3>
 
               {/* COURSE DESCRIPTION SUMMARY */}
-              <p className="text-slate-300/90 text-[8px] sm:text-xs md:text-xs font-normal max-w-xl mx-auto leading-relaxed px-4 my-1">
+              <p className="text-slate-300/90 text-[10px] sm:text-xs md:text-sm font-normal max-w-xl mx-auto leading-relaxed px-4 my-1">
                 an advanced training in 30+ AI Tools covering AI Video Creation, AI Image Generation, AI Music & Song Creation, Graphic Design, Website Development, Professional Presentations, and other AI-powered digital skills.
               </p>
             </div>

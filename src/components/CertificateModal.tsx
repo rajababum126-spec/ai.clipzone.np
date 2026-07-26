@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Printer, CheckCircle, Share2, ShieldCheck, Award, Download, Loader2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import { LOGO_DATA_URL } from '../logo';
 
 interface CertificateModalProps {
   studentName: string;
@@ -35,7 +36,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
       // Ensure document fonts are fully loaded before capturing
       if (document.fonts && document.fonts.ready) {
-        await document.fonts.ready;
+        await document.fonts.ready.catch(() => {});
       }
 
       // Save original style
@@ -44,26 +45,40 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
       // Temporarily strip outer drop shadow so image has no extra outer margin around the border
       node.style.boxShadow = 'none';
 
-      // Warm up image/font rendering cache
-      await toPng(node, { cacheBust: true }).catch(() => {});
-
-      // Generate sharp high quality PNG directly from visible certificate element
-      const dataUrl = await toPng(node, {
-        quality: 1.0,
-        pixelRatio: 2.5,
-        cacheBust: true,
-      });
+      let dataUrl = '';
+      try {
+        // Primary high-res PNG export with fontEmbedCSS bypassed to prevent cross-origin font CSS errors
+        dataUrl = await toPng(node, {
+          quality: 1.0,
+          pixelRatio: 2.5,
+          cacheBust: true,
+          fontEmbedCSS: '',
+          skipFonts: true,
+        });
+      } catch (firstErr) {
+        console.warn('Initial toPng failed, trying fallback mode:', firstErr);
+        dataUrl = await toPng(node, {
+          quality: 0.95,
+          pixelRatio: 2.0,
+          fontEmbedCSS: '',
+        });
+      }
 
       // Restore box shadow
       node.style.boxShadow = origBoxShadow;
 
-      const link = document.createElement('a');
-      const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
-      link.download = `AI_Clipzone_Certificate_${sanitizedName}.png`;
-      link.href = dataUrl;
-      link.click();
+      if (dataUrl) {
+        const link = document.createElement('a');
+        const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');
+        link.download = `AI_Clipzone_Certificate_${sanitizedName}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (err) {
       console.error('Download error:', err);
+      // Fallback smoothly to browser print/save PDF if PNG canvas is strictly blocked by browser
       window.print();
     } finally {
       setIsDownloading(false);
@@ -224,9 +239,8 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-xl bg-gradient-to-br from-[#162550] via-[#0b1432] to-[#050918] shrink-0 relative group">
                   <div className="w-full h-full rounded-full border border-[#e6c663]/80 flex items-center justify-center p-1 bg-[#0a122c] shadow-inner overflow-hidden">
                     <img 
-                      src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhVG6Fh_bUev_FEchbwGJsmVz3s92FK-6lTlHj-sbYBguGhsYp8O3_J7c_SOfvnXCSWWHjLjqoeorMTcWQeac1CbhIaYtgfmHrYz44urYRSjlmrrNPoe9bMVCvcoTllNI4JaajsRwwMmuyvpUpaFs3r3UJs-4d6UuW0AmES38d4115LxC4Vsx76Wf6KW4v8/s1600/12844.png" 
+                      src={LOGO_DATA_URL} 
                       alt="AI Clipzone Logo"
-                      referrerPolicy="no-referrer"
                       className="w-full h-full object-contain filter drop-shadow-[0_2px_4px_rgba(245,158,11,0.5)]"
                     />
                   </div>

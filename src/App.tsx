@@ -52,6 +52,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, g
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
+import { LOGO_DATA_URL } from './logo';
 
 enum OperationType {
   CREATE = 'create',
@@ -1571,9 +1572,8 @@ export default function App() {
             title="Click logo for Admin options"
           >
             <img 
-              src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhVG6Fh_bUev_FEchbwGJsmVz3s92FK-6lTlHj-sbYBguGhsYp8O3_J7c_SOfvnXCSWWHjLjqoeorMTcWQeac1CbhIaYtgfmHrYz44urYRSjlmrrNPoe9bMVCvcoTllNI4JaajsRwwMmuyvpUpaFs3r3UJs-4d6UuW0AmES38d4115LxC4Vsx76Wf6KW4v8/s1600/12844.png" 
+              src={LOGO_DATA_URL} 
               alt="AI Clipzone Logo"
-              referrerPolicy="no-referrer"
               className="w-10 h-10 object-contain rounded-full border border-amber-400/50 shadow-sm bg-slate-900/40 p-0.5 group-hover:scale-105 transition-transform"
             />
             <h1 className="text-lg md:text-xl font-extrabold tracking-tight flex items-center gap-1">

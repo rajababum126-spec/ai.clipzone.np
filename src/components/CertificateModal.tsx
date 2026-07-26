@@ -236,14 +236,12 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
             <div className="relative z-10 flex items-center justify-between w-full pt-1 sm:pt-2 px-2 sm:px-6">
               {/* Prominent Official Gold Ai Clipzone Emblem Badge (Top Left) */}
               <div className="flex items-center gap-2.5 shrink-0">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 border-[#e6c663] p-1 flex items-center justify-center shadow-xl bg-gradient-to-br from-[#162550] via-[#0b1432] to-[#050918] shrink-0 relative group">
-                  <div className="w-full h-full rounded-full border border-[#e6c663]/80 flex items-center justify-center p-1 bg-[#0a122c] shadow-inner overflow-hidden">
-                    <img 
-                      src={LOGO_DATA_URL} 
-                      alt="AI Clipzone Logo"
-                      className="w-full h-full object-contain filter drop-shadow-[0_2px_4px_rgba(245,158,11,0.5)]"
-                    />
-                  </div>
+                <div className="w-16 h-16 sm:w-22 sm:h-22 md:w-26 md:h-26 rounded-full border-2 sm:border-3 border-[#e6c663] p-1.5 flex items-center justify-center shadow-xl bg-[#0a122c] shrink-0 overflow-hidden relative group">
+                  <img 
+                    src={LOGO_DATA_URL} 
+                    alt="AI Clipzone Logo"
+                    className="w-full h-full object-contain filter drop-shadow-[0_2px_6px_rgba(245,158,11,0.6)]"
+                  />
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
                   <span
@@ -277,7 +275,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </div>
 
               {/* Right Spacer to Balance Emblem Width & Maintain Pure Center Title Alignment */}
-              <div className="w-12 sm:w-16 md:w-20 shrink-0" />
+              <div className="w-16 sm:w-22 md:w-26 shrink-0" />
             </div>
 
             {/* CERTIFICATION BODY STATEMENT */}

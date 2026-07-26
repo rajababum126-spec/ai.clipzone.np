@@ -38,30 +38,41 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
         await document.fonts.ready;
       }
 
-      // Save existing inline style values
-      const origWidth = node.style.width;
-      const origMinWidth = node.style.minWidth;
-      const origMaxWidth = node.style.maxWidth;
+      // Clone node for isolated offscreen capture without viewport overflow or outer shadow margins
+      const clone = node.cloneNode(true) as HTMLElement;
 
-      // Temporarily set exact landscape dimensions on the visible node
-      node.style.width = '880px';
-      node.style.minWidth = '880px';
-      node.style.maxWidth = '880px';
+      // Strip outer drop-shadow so html-to-image doesn't add wide empty borders
+      clone.style.boxShadow = 'inset 0 0 80px rgba(197,155,39,0.15)';
+      clone.style.width = '1200px';
+      clone.style.height = '848px';
+      clone.style.minWidth = '1200px';
+      clone.style.maxWidth = '1200px';
+      clone.style.minHeight = '848px';
+      clone.style.maxHeight = '848px';
+      clone.style.position = 'fixed';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      clone.style.margin = '0';
+      clone.style.padding = '36px 48px';
+      clone.style.transform = 'none';
+      clone.style.borderRadius = '16px';
 
-      // Brief delay to allow browser to calculate layout
-      await new Promise((resolve) => setTimeout(resolve, 80));
+      document.body.appendChild(clone);
 
-      const dataUrl = await toPng(node, {
+      // Brief delay to allow browser to calculate layout on clone
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const dataUrl = await toPng(clone, {
         quality: 1.0,
-        pixelRatio: 2.5,
+        pixelRatio: 2,
         cacheBust: true,
-        fontEmbedCSS: '', // Disables fetching external webfonts which causes CORS/blank canvas
+        width: 1200,
+        height: 848,
+        fontEmbedCSS: '',
       });
 
-      // Restore original inline styles
-      node.style.width = origWidth;
-      node.style.minWidth = origMinWidth;
-      node.style.maxWidth = origMaxWidth;
+      // Remove clone
+      document.body.removeChild(clone);
 
       const link = document.createElement('a');
       const sanitizedName = (studentName || 'Student').replace(/[^a-zA-Z0-9_-]/g, '_');

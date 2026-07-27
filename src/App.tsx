@@ -2929,13 +2929,13 @@ export default function App() {
 
                     {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
                     <div 
-                      className="absolute top-0 inset-x-0 h-16 bg-transparent z-45 cursor-default" 
+                      className="absolute top-0 inset-x-0 h-24 bg-transparent z-45 cursor-default pointer-events-auto" 
                       title="Secure Player Header" 
                       onContextMenu={(e) => e.preventDefault()}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     />
                     <div 
-                      className="absolute bottom-0 right-0 w-44 h-14 bg-transparent z-45 cursor-default" 
+                      className="absolute bottom-0 right-0 w-64 h-20 bg-transparent z-45 cursor-default pointer-events-auto" 
                       title="Secure Player Branding Block" 
                       onContextMenu={(e) => e.preventDefault()}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
@@ -2962,7 +2962,7 @@ export default function App() {
                         <iframe
                           src={secureEmbedSrc}
                           className="w-full h-full object-cover"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
                           sandbox="allow-scripts allow-same-origin allow-presentation"
                           title={currentLecture.title}
@@ -4361,7 +4361,6 @@ export default function App() {
           style={{ width: '100vw', height: '100vh' }}
           onContextMenu={(e) => e.preventDefault()}
           onCopy={(e) => e.preventDefault()}
-          onSelectStart={(e) => e.preventDefault()}
         >
           {/* Main Video Container */}
           <div className="flex-1 relative flex flex-col justify-center bg-black h-full w-full">
@@ -4413,13 +4412,13 @@ export default function App() {
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles, share links and copy actions */}
               <div 
-                className="absolute top-0 inset-x-0 h-20 bg-transparent z-45 cursor-default pointer-events-auto" 
+                className="absolute top-0 inset-x-0 h-24 bg-transparent z-45 cursor-default pointer-events-auto" 
                 title="Protected Player Header" 
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
               />
               <div 
-                className="absolute bottom-0 right-0 w-64 h-20 bg-transparent z-45 cursor-default pointer-events-auto" 
+                className="absolute bottom-0 right-0 w-72 h-24 bg-transparent z-45 cursor-default pointer-events-auto" 
                 title="Protected Player Branding Block" 
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
@@ -4436,7 +4435,7 @@ export default function App() {
               <iframe
                 src={getSecureYouTubeEmbedUrl(fullscreenVideo.videoUrl, true)}
                 className="w-full h-full absolute inset-0 border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 sandbox="allow-scripts allow-same-origin allow-presentation"
                 title={fullscreenVideo.title}

@@ -961,29 +961,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const orientation = (window.screen as any)?.orientation;
     if (!fullscreenVideo) {
       setIsForceLandscape(false);
       setVideoRotation(0);
-      if (orientation && typeof orientation.unlock === 'function') {
-        try { orientation.unlock(); } catch (e) {}
-      }
     } else {
-      // Auto-request browser fullscreen and lock orientation to landscape
-      if (document.documentElement && document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      }
-      if (orientation && typeof orientation.lock === 'function') {
-        orientation.lock('landscape').catch(() => {});
-      }
-      // Auto-rotate 90 degrees on mobile/portrait aspect ratio screens so video fills full screen
-      if (window.innerWidth < window.innerHeight) {
-        setVideoRotation(90);
-        setIsForceLandscape(true);
-      } else {
-        setVideoRotation(0);
-        setIsForceLandscape(true);
-      }
+      // Clean overlay full screen presentation without native browser prompt glitches
+      setVideoRotation(0);
+      setIsForceLandscape(false);
     }
   }, [fullscreenVideo]);
 
@@ -991,10 +975,6 @@ export default function App() {
     if (e) e.stopPropagation();
     if (document.fullscreenElement && document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
-    }
-    const orientation = (window.screen as any)?.orientation;
-    if (orientation && typeof orientation.unlock === 'function') {
-      try { orientation.unlock(); } catch (e) {}
     }
     setVideoRotation(0);
     setIsForceLandscape(false);
@@ -4398,29 +4378,13 @@ export default function App() {
               </button>
             </div>
 
-            {/* Embed Video Iframe Container with Auto 90° Landscape Rotation */}
-            <div 
-              className={`bg-black flex items-center justify-center transition-all duration-300 ${
-                videoRotation !== 0
-                  ? 'fixed inset-0 z-[10000]' 
-                  : 'relative w-full h-full flex-1 overflow-hidden'
-              }`}
-              style={getRotationStyle()}
-            >
+            {/* Embed Video Iframe Container */}
+            <div className="relative w-full h-full flex-1 overflow-hidden bg-black flex items-center justify-center">
               {/* Context guard to prevent direct saving */}
               <div 
                 onContextMenu={(e) => e.preventDefault()}
                 className="absolute inset-0 z-50 pointer-events-none"
               />
-
-              {/* Floating 'X' Close Button overlaid directly on the rotated video view */}
-              <button
-                onClick={handleCloseVideo}
-                className="absolute top-4 right-4 z-[10001] bg-rose-600/90 hover:bg-rose-600 text-white p-3 rounded-full border border-rose-400/50 shadow-2xl transition cursor-pointer flex items-center justify-center active:scale-95"
-                title="Close Video (भिडियो बन्द गर्नुहोस्)"
-              >
-                <X className="w-6 h-6 stroke-[3]" />
-              </button>
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
               <div 

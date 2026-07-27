@@ -949,15 +949,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const orientation = (window.screen as any)?.orientation;
     if (!fullscreenVideo) {
       setIsForceLandscape(false);
       setVideoRotation(0);
+      if (orientation && typeof orientation.unlock === 'function') {
+        try { orientation.unlock(); } catch (e) {}
+      }
+    } else {
+      // Lock orientation in fullscreen so tilting or turning phone ulto/sulto doesn't auto rotate unexpectedly
+      if (orientation && typeof orientation.lock === 'function') {
+        orientation.lock('portrait-primary').catch(() => {
+          orientation.lock('portrait').catch(() => {});
+        });
+      }
     }
   }, [fullscreenVideo]);
 
   const handleRotateVideo = () => {
-    const angles = [0, 180, 270];
-    const currentDeg = videoRotation || (isForceLandscape ? 180 : 0);
+    const angles = [0, 90, 180, 270];
+    const currentDeg = videoRotation;
     const currentIndex = angles.indexOf(currentDeg);
     const nextDeg = angles[currentIndex === -1 ? 1 : (currentIndex + 1) % angles.length];
     setVideoRotation(nextDeg);
@@ -966,7 +977,7 @@ export default function App() {
     } else {
       setIsForceLandscape(true);
     }
-    showToast(`भिडियो ${nextDeg}° Fullscreen (Video rotated to ${nextDeg}°)`, 'info');
+    showToast(`भिडियो Rotation: ${nextDeg}°`, 'info');
   };
 
   const setSpecificRotation = (deg: number) => {
@@ -980,7 +991,19 @@ export default function App() {
   };
 
   const getRotationStyle = () => {
-    const currentDeg = videoRotation || (isForceLandscape ? 180 : 0);
+    const currentDeg = videoRotation;
+    if (currentDeg === 90) {
+      return {
+        width: '100vh',
+        height: '100vw',
+        position: 'fixed' as const,
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%) rotate(90deg)',
+        zIndex: 10000,
+        backgroundColor: '#000'
+      };
+    }
     if (currentDeg === 180) {
       return {
         width: '100vw',
@@ -1016,14 +1039,19 @@ export default function App() {
         }
         const orientation = (window.screen as any)?.orientation;
         if (orientation && typeof orientation.lock === 'function') {
-          await orientation.lock('landscape').catch(() => {});
+          await orientation.lock('portrait-primary').catch(() => {
+            orientation.lock('portrait').catch(() => {});
+          });
         }
-        // Direct 180° Fullscreen rotation (never 90°)
-        setIsForceLandscape(true);
-        setVideoRotation(180);
+        setIsForceLandscape(false);
+        setVideoRotation(0);
       } else {
         if (document.exitFullscreen) {
           await document.exitFullscreen().catch(() => {});
+        }
+        const orientation = (window.screen as any)?.orientation;
+        if (orientation && typeof orientation.unlock === 'function') {
+          try { orientation.unlock(); } catch (e) {}
         }
         setIsForceLandscape(false);
         setVideoRotation(0);
@@ -4326,20 +4354,20 @@ export default function App() {
                 <button
                   onClick={handleRotateVideo}
                   className="bg-purple-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-2.5 py-2 md:px-3.5 md:py-2.5 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg active:scale-95"
-                  title="Rotate Video Screen (0°, 180°, 270°)"
+                  title="Rotate Video Screen (0°, 90°, 180°, 270°)"
                 >
                   <RotateCw className="w-3.5 h-3.5" />
-                  <span>Rotate 🔄 ({videoRotation || (isForceLandscape ? 180 : 0)}°)</span>
+                  <span>Rotate 🔄 ({videoRotation}°)</span>
                 </button>
 
                 {/* Quick Angle Badges */}
                 <div className="hidden sm:flex items-center bg-slate-900/90 rounded-xl p-0.5 border border-slate-800">
-                  {[0, 180, 270].map((deg) => (
+                  {[0, 90, 180, 270].map((deg) => (
                     <button
                       key={deg}
                       onClick={() => setSpecificRotation(deg)}
                       className={`px-2 py-1 rounded-lg text-[10px] font-black transition cursor-pointer ${
-                        (videoRotation === deg || (deg === 180 && isForceLandscape && videoRotation === 0))
+                        videoRotation === deg
                           ? 'bg-purple-600 text-white shadow-xs'
                           : 'text-slate-400 hover:text-white'
                       }`}
@@ -4352,10 +4380,10 @@ export default function App() {
                 <button
                   onClick={toggleFullscreenMode}
                   className="bg-slate-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg"
-                  title={isNativeFullscreen ? "Normal Screen Mode" : "Horizontal Fullscreen Mode"}
+                  title={isNativeFullscreen ? "Exit Fullscreen Mode" : "Fullscreen Mode"}
                 >
                   {isNativeFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                  <span>{isNativeFullscreen ? 'Normal Screen' : 'Horizontal Fullscreen (फुलस्क्रिन)'}</span>
+                  <span>{isNativeFullscreen ? 'Normal Screen' : 'Fullscreen ⛶'}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -4377,7 +4405,7 @@ export default function App() {
             {/* Embed Video Iframe Container with Multi-Direction Rotation Support */}
             <div 
               className={`bg-black flex items-center justify-center transition-all duration-300 ${
-                (isForceLandscape || videoRotation !== 0)
+                videoRotation !== 0
                   ? 'fixed inset-0 z-[10000]' 
                   : 'relative w-full h-full flex-1 overflow-hidden'
               }`}
@@ -4389,7 +4417,7 @@ export default function App() {
                 className="absolute inset-0 z-50 pointer-events-none"
               />
 
-              {/* Floating Horizontal & Rotation Control Bar inside Video area */}
+              {/* Floating Rotation Control Bar inside Video area */}
               <div className="absolute top-4 right-4 z-[60] flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md p-1 rounded-2xl border border-slate-800 shadow-2xl">
                 <button
                   onClick={(e) => {
@@ -4397,13 +4425,13 @@ export default function App() {
                     handleRotateVideo();
                   }}
                   className="bg-purple-700 hover:bg-purple-600 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
-                  title="Rotate Video Screen (0°, 180°, 270°)"
+                  title="Rotate Video Screen (0°, 90°, 180°, 270°)"
                 >
                   <RotateCw className="w-3 h-3" />
-                  <span>Rotate 🔄 ({videoRotation || (isForceLandscape ? 180 : 0)}°)</span>
+                  <span>Rotate 🔄 ({videoRotation}°)</span>
                 </button>
 
-                {[0, 180, 270].map((deg) => (
+                {[0, 90, 180, 270].map((deg) => (
                   <button
                     key={deg}
                     onClick={(e) => {
@@ -4411,7 +4439,7 @@ export default function App() {
                       setSpecificRotation(deg);
                     }}
                     className={`px-2 py-1 rounded-lg text-[9px] md:text-[10px] font-black transition cursor-pointer ${
-                      (videoRotation === deg || (deg === 180 && isForceLandscape && videoRotation === 0))
+                      videoRotation === deg
                         ? 'bg-purple-600 text-white shadow-xs'
                         : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white'
                     }`}
@@ -4423,23 +4451,13 @@ export default function App() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isForceLandscape && videoRotation === 0) {
-                      setIsForceLandscape(true);
-                      setVideoRotation(180);
-                      toggleFullscreenMode();
-                    } else {
-                      setIsForceLandscape(false);
-                      setVideoRotation(0);
-                      if (document.fullscreenElement && document.exitFullscreen) {
-                        document.exitFullscreen().catch(() => {});
-                      }
-                    }
+                    toggleFullscreenMode();
                   }}
                   className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-slate-700 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
-                  title="Toggle Fullscreen Horizontal Mode"
+                  title="Toggle Fullscreen Mode"
                 >
-                  {(isNativeFullscreen || isForceLandscape || videoRotation !== 0) ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
-                  <span>{(isNativeFullscreen || isForceLandscape || videoRotation !== 0) ? 'Reset View' : 'Horizontal 180° ⛶'}</span>
+                  {isNativeFullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                  <span>{isNativeFullscreen ? 'Reset View' : 'Fullscreen ⛶'}</span>
                 </button>
               </div>
 

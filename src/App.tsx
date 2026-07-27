@@ -934,6 +934,18 @@ export default function App() {
   const [isNativeFullscreen, setIsNativeFullscreen] = useState<boolean>(false);
   const [isForceLandscape, setIsForceLandscape] = useState<boolean>(false);
   const [videoRotation, setVideoRotation] = useState<number>(0); // 0, 90, 180, 270 degrees
+  const [showOverlayControls, setShowOverlayControls] = useState<boolean>(true);
+  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetOverlayControlsTimer = (duration = 2500) => {
+    setShowOverlayControls(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowOverlayControls(false);
+    }, duration);
+  };
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -957,14 +969,37 @@ export default function App() {
         try { orientation.unlock(); } catch (e) {}
       }
     } else {
-      // Lock orientation in fullscreen so tilting or turning phone ulto/sulto doesn't auto rotate unexpectedly
+      // Auto-request browser fullscreen and lock orientation to landscape
+      if (document.documentElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
       if (orientation && typeof orientation.lock === 'function') {
-        orientation.lock('portrait-primary').catch(() => {
-          orientation.lock('portrait').catch(() => {});
-        });
+        orientation.lock('landscape').catch(() => {});
+      }
+      // Auto-rotate 90 degrees on mobile/portrait aspect ratio screens so video fills full screen
+      if (window.innerWidth < window.innerHeight) {
+        setVideoRotation(90);
+        setIsForceLandscape(true);
+      } else {
+        setVideoRotation(0);
+        setIsForceLandscape(true);
       }
     }
   }, [fullscreenVideo]);
+
+  const handleCloseVideo = (e?: { stopPropagation: () => void }) => {
+    if (e) e.stopPropagation();
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    const orientation = (window.screen as any)?.orientation;
+    if (orientation && typeof orientation.unlock === 'function') {
+      try { orientation.unlock(); } catch (e) {}
+    }
+    setVideoRotation(0);
+    setIsForceLandscape(false);
+    setFullscreenVideo(null);
+  };
 
   const handleRotateVideo = () => {
     const angles = [0, 90, 180, 270];
@@ -978,6 +1013,7 @@ export default function App() {
       setIsForceLandscape(true);
     }
     showToast(`भिडियो Rotation: ${nextDeg}°`, 'info');
+    resetOverlayControlsTimer(1800);
   };
 
   const setSpecificRotation = (deg: number) => {
@@ -988,6 +1024,7 @@ export default function App() {
       setIsForceLandscape(true);
     }
     showToast(`भिडियो Rotation: ${deg}°`, 'info');
+    resetOverlayControlsTimer(1800);
   };
 
   const getRotationStyle = () => {
@@ -4331,78 +4368,37 @@ export default function App() {
 
       </div>
 
-      {/* Fullscreen Immersive Video Player Overlay */}
+      {/* Fullscreen Immersive Video Player Overlay with Auto-Rotate & Simple 'X' Close Button */}
       {fullscreenVideo && (
         <div 
           className="fixed inset-0 bg-black z-[9999] flex flex-col md:flex-row text-white font-sans overflow-hidden"
           style={{ width: '100vw', height: '100vh' }}
         >
-          {/* Main Video Area */}
-          <div className="flex-1 relative flex flex-col justify-center bg-black h-full">
-            {/* Top Bar Controls */}
-            <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 to-transparent p-4 flex items-center justify-between z-50">
+          {/* Main Video Container */}
+          <div className="flex-1 relative flex flex-col justify-center bg-black h-full w-full">
+            
+            {/* Top Bar - Video Title Info & Only 'X' Close Button */}
+            <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/60 to-transparent p-4 flex items-center justify-between z-50">
               <div className="text-left pr-4">
                 <span className="text-[10px] text-purple-400 font-black uppercase tracking-widest block font-sans">
                   {fullscreenVideo.courseTitle}
                 </span>
-                <h4 className="text-white text-xs md:text-base font-black truncate max-w-[280px] sm:max-w-md md:max-w-xl font-sans mt-0.5">
+                <h4 className="text-white text-xs md:text-base font-black truncate max-w-[260px] sm:max-w-md md:max-w-xl font-sans mt-0.5">
                   {fullscreenVideo.title} (Lecture {fullscreenVideo.idx + 1})
                 </h4>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Rotate Video Button */}
-                <button
-                  onClick={handleRotateVideo}
-                  className="bg-purple-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-2.5 py-2 md:px-3.5 md:py-2.5 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg active:scale-95"
-                  title="Rotate Video Screen (0°, 90°, 180°, 270°)"
-                >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  <span>Rotate 🔄 ({videoRotation}°)</span>
-                </button>
 
-                {/* Quick Angle Badges */}
-                <div className="hidden sm:flex items-center bg-slate-900/90 rounded-xl p-0.5 border border-slate-800">
-                  {[0, 90, 180, 270].map((deg) => (
-                    <button
-                      key={deg}
-                      onClick={() => setSpecificRotation(deg)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-black transition cursor-pointer ${
-                        videoRotation === deg
-                          ? 'bg-purple-600 text-white shadow-xs'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {deg}°
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={toggleFullscreenMode}
-                  className="bg-slate-900/80 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg"
-                  title={isNativeFullscreen ? "Exit Fullscreen Mode" : "Fullscreen Mode"}
-                >
-                  {isNativeFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                  <span>{isNativeFullscreen ? 'Normal Screen' : 'Fullscreen ⛶'}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    if (document.fullscreenElement && document.exitFullscreen) {
-                      document.exitFullscreen().catch(() => {});
-                    }
-                    setVideoRotation(0);
-                    setIsForceLandscape(false);
-                    setFullscreenVideo(null);
-                  }}
-                  className="bg-slate-900/80 hover:bg-rose-600 text-white font-extrabold text-xs px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1 font-sans shadow-lg"
-                >
-                  <X className="w-4 h-4" />
-                  <span className="hidden sm:inline">Exit</span>
-                </button>
-              </div>
+              {/* ONLY 'X' Close Button as requested */}
+              <button
+                onClick={handleCloseVideo}
+                className="bg-rose-600 hover:bg-rose-700 text-white p-2.5 rounded-full border border-rose-500/50 transition cursor-pointer flex items-center justify-center shadow-2xl active:scale-95 z-50"
+                title="Close Video (भिडियो बन्द गर्नुहोस्)"
+              >
+                <X className="w-5 h-5 stroke-[2.5]" />
+              </button>
             </div>
 
-            {/* Embed Video Iframe Container with Multi-Direction Rotation Support */}
+            {/* Embed Video Iframe Container with Auto 90° Landscape Rotation */}
             <div 
               className={`bg-black flex items-center justify-center transition-all duration-300 ${
                 videoRotation !== 0
@@ -4417,49 +4413,14 @@ export default function App() {
                 className="absolute inset-0 z-50 pointer-events-none"
               />
 
-              {/* Floating Rotation Control Bar inside Video area */}
-              <div className="absolute top-4 right-4 z-[60] flex items-center gap-1.5 bg-slate-950/90 backdrop-blur-md p-1 rounded-2xl border border-slate-800 shadow-2xl">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRotateVideo();
-                  }}
-                  className="bg-purple-700 hover:bg-purple-600 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
-                  title="Rotate Video Screen (0°, 90°, 180°, 270°)"
-                >
-                  <RotateCw className="w-3 h-3" />
-                  <span>Rotate 🔄 ({videoRotation}°)</span>
-                </button>
-
-                {[0, 90, 180, 270].map((deg) => (
-                  <button
-                    key={deg}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSpecificRotation(deg);
-                    }}
-                    className={`px-2 py-1 rounded-lg text-[9px] md:text-[10px] font-black transition cursor-pointer ${
-                      videoRotation === deg
-                        ? 'bg-purple-600 text-white shadow-xs'
-                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    {deg}°
-                  </button>
-                ))}
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFullscreenMode();
-                  }}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1.5 md:px-3 md:py-2 rounded-xl border border-slate-700 transition cursor-pointer flex items-center gap-1 shadow-lg active:scale-95"
-                  title="Toggle Fullscreen Mode"
-                >
-                  {isNativeFullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
-                  <span>{isNativeFullscreen ? 'Reset View' : 'Fullscreen ⛶'}</span>
-                </button>
-              </div>
+              {/* Floating 'X' Close Button overlaid directly on the rotated video view */}
+              <button
+                onClick={handleCloseVideo}
+                className="absolute top-4 right-4 z-[10001] bg-rose-600/90 hover:bg-rose-600 text-white p-3 rounded-full border border-rose-400/50 shadow-2xl transition cursor-pointer flex items-center justify-center active:scale-95"
+                title="Close Video (भिडियो बन्द गर्नुहोस्)"
+              >
+                <X className="w-6 h-6 stroke-[3]" />
+              </button>
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
               <div 

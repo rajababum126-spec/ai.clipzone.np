@@ -126,7 +126,8 @@ function getYouTubeIdGlobal(url: string): string {
 function getSecureYouTubeEmbedUrl(url: string, autoplay: boolean = false): string {
   const ytId = getYouTubeIdGlobal(url);
   if (!ytId) return url;
-  return `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3&disablekb=1&enablejsapi=1&autoplay=${autoplay ? 1 : 0}`;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&showinfo=0&controls=1&fs=0&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}&autoplay=${autoplay ? 1 : 0}`;
 }
 
 export default function App() {
@@ -4356,8 +4357,11 @@ export default function App() {
       {/* Fullscreen Immersive Video Player Overlay with Auto-Rotate & Simple 'X' Close Button */}
       {fullscreenVideo && (
         <div 
-          className="fixed inset-0 bg-black z-[9999] flex flex-col md:flex-row text-white font-sans overflow-hidden"
+          className="fixed inset-0 bg-black z-[9999] flex flex-col md:flex-row text-white font-sans overflow-hidden select-none"
           style={{ width: '100vw', height: '100vh' }}
+          onContextMenu={(e) => e.preventDefault()}
+          onCopy={(e) => e.preventDefault()}
+          onSelectStart={(e) => e.preventDefault()}
         >
           {/* Main Video Container */}
           <div className="flex-1 relative flex flex-col justify-center bg-black h-full w-full">
@@ -4407,16 +4411,16 @@ export default function App() {
                 <X className="w-6 h-6 stroke-[3]" />
               </button>
 
-              {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
+              {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles, share links and copy actions */}
               <div 
-                className="absolute top-0 inset-x-0 h-16 bg-transparent z-45 cursor-default pointer-events-auto" 
-                title="Secure Player Header" 
+                className="absolute top-0 inset-x-0 h-20 bg-transparent z-45 cursor-default pointer-events-auto" 
+                title="Protected Player Header" 
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
               />
               <div 
-                className="absolute bottom-0 right-0 w-48 h-16 bg-transparent z-45 cursor-default pointer-events-auto" 
-                title="Secure Player Branding Block" 
+                className="absolute bottom-0 right-0 w-64 h-20 bg-transparent z-45 cursor-default pointer-events-auto" 
+                title="Protected Player Branding Block" 
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
               />

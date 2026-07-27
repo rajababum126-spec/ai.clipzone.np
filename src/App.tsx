@@ -966,14 +966,8 @@ export default function App() {
       setIsForceLandscape(false);
       setVideoRotation(0);
     } else {
-      // Auto rotate 90° for landscape view when screen is portrait (e.g. mobile phones)
-      if (window.innerWidth < window.innerHeight) {
-        setVideoRotation(90);
-        setIsForceLandscape(true);
-      } else {
-        setVideoRotation(0);
-        setIsForceLandscape(false);
-      }
+      setVideoRotation(0);
+      setIsForceLandscape(false);
     }
   }, [fullscreenVideo]);
 
@@ -1970,6 +1964,9 @@ export default function App() {
                                 key={idx}
                                 whileHover={{ scale: 1.005, x: 2 }}
                                 onClick={() => {
+                                  if (document.documentElement && document.documentElement.requestFullscreen) {
+                                    document.documentElement.requestFullscreen().catch(() => {});
+                                  }
                                   const securePlayUrl = getSecureYouTubeEmbedUrl(video.videoUrl, true);
                                   setFullscreenVideo({
                                     courseTitle: currentClassroomCourse.title,
@@ -2985,6 +2982,9 @@ export default function App() {
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       <button
                         onClick={() => {
+                          if (document.documentElement && document.documentElement.requestFullscreen) {
+                            document.documentElement.requestFullscreen().catch(() => {});
+                          }
                           const list = selectedCourse.videos && selectedCourse.videos.length > 0 
                             ? selectedCourse.videos 
                             : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: '' }];
@@ -4365,25 +4365,54 @@ export default function App() {
           {/* Main Video Container */}
           <div className="flex-1 relative flex flex-col justify-center bg-black h-full w-full">
             
-            {/* Top Bar - Video Title Info & Only 'X' Close Button */}
+            {/* Top Bar - Video Title Info, Rotate "🔄" Button, Full Screen Button & "X" Close Button */}
             <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/60 to-transparent p-4 flex items-center justify-between z-50">
               <div className="text-left pr-4">
                 <span className="text-[10px] text-purple-400 font-black uppercase tracking-widest block font-sans">
                   {fullscreenVideo.courseTitle}
                 </span>
-                <h4 className="text-white text-xs md:text-base font-black truncate max-w-[260px] sm:max-w-md md:max-w-xl font-sans mt-0.5">
+                <h4 className="text-white text-xs md:text-base font-black truncate max-w-[180px] sm:max-w-md md:max-w-xl font-sans mt-0.5">
                   {fullscreenVideo.title} (Lecture {fullscreenVideo.idx + 1})
                 </h4>
               </div>
 
-              {/* ONLY 'X' Close Button as requested */}
-              <button
-                onClick={handleCloseVideo}
-                className="bg-rose-600 hover:bg-rose-700 text-white p-2.5 rounded-full border border-rose-500/50 transition cursor-pointer flex items-center justify-center shadow-2xl active:scale-95 z-50"
-                title="Close Video (भिडियो बन्द गर्नुहोस्)"
-              >
-                <X className="w-5 h-5 stroke-[2.5]" />
-              </button>
+              {/* Top Controls: 🔄 Rotate Button, Full Screen Button & 'X' Close Button */}
+              <div className="flex items-center gap-2">
+                {/* Single Rotate 🔄 Button - rotates 360° across 4 directions */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRotateVideo();
+                  }}
+                  className="bg-purple-900/90 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 rounded-xl border border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 shadow-lg active:scale-95"
+                  title="Rotate Video Screen 🔄 (चारैतिर घुमाउनुहोस्)"
+                >
+                  <RotateCw className="w-4 h-4" />
+                  <span className="font-sans font-black">🔄 Rotate</span>
+                </button>
+
+                {/* Full Screen Mode Toggle Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreenMode();
+                  }}
+                  className="bg-slate-900/90 hover:bg-purple-600 text-white font-extrabold text-xs px-3 py-2 rounded-xl border border-slate-800 hover:border-purple-500/50 transition cursor-pointer flex items-center gap-1.5 font-sans shadow-lg active:scale-95"
+                  title="Full Screen Mode"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Full Screen ⛶</span>
+                </button>
+
+                {/* 'X' Close Button */}
+                <button
+                  onClick={handleCloseVideo}
+                  className="bg-rose-600 hover:bg-rose-700 text-white p-2.5 rounded-full border border-rose-500/50 transition cursor-pointer flex items-center justify-center shadow-2xl active:scale-95 z-50"
+                  title="Close Video (भिडियो बन्द गर्नुहोस्)"
+                >
+                  <X className="w-5 h-5 stroke-[2.5]" />
+                </button>
+              </div>
             </div>
 
             {/* Embed Video Iframe Container with Auto Landscape Rotation Support */}
@@ -4401,14 +4430,28 @@ export default function App() {
                 className="absolute inset-0 z-50 pointer-events-none"
               />
 
-              {/* Floating 'X' Close Button overlaid directly on the rotated video view */}
-              <button
-                onClick={handleCloseVideo}
-                className="absolute top-4 right-4 z-[10001] bg-rose-600 hover:bg-rose-700 text-white p-3 rounded-full border border-rose-400/50 shadow-2xl transition cursor-pointer flex items-center justify-center active:scale-95"
-                title="Close Video (भिडियो बन्द गर्नुहोस्)"
-              >
-                <X className="w-6 h-6 stroke-[3]" />
-              </button>
+              {/* Floating Rotate 🔄 & Close X Button Overlay directly on rotated video view */}
+              {videoRotation !== 0 && (
+                <div className="absolute top-4 right-4 z-[10001] flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRotateVideo();
+                    }}
+                    className="bg-purple-900/90 hover:bg-purple-600 text-white p-3 rounded-full border border-purple-400/50 shadow-2xl transition cursor-pointer flex items-center justify-center active:scale-95"
+                    title="Rotate Video Screen 🔄"
+                  >
+                    <RotateCw className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={handleCloseVideo}
+                    className="bg-rose-600 hover:bg-rose-700 text-white p-3 rounded-full border border-rose-400/50 shadow-2xl transition cursor-pointer flex items-center justify-center active:scale-95"
+                    title="Close Video (भिडियो बन्द गर्नुहोस्)"
+                  >
+                    <X className="w-6 h-6 stroke-[3]" />
+                  </button>
+                </div>
+              )}
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles, share links and copy actions */}
               <div 

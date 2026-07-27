@@ -965,9 +965,14 @@ export default function App() {
       setIsForceLandscape(false);
       setVideoRotation(0);
     } else {
-      // Clean overlay full screen presentation without native browser prompt glitches
-      setVideoRotation(0);
-      setIsForceLandscape(false);
+      // Auto rotate 90° for landscape view when screen is portrait (e.g. mobile phones)
+      if (window.innerWidth < window.innerHeight) {
+        setVideoRotation(90);
+        setIsForceLandscape(true);
+      } else {
+        setVideoRotation(0);
+        setIsForceLandscape(false);
+      }
     }
   }, [fullscreenVideo]);
 
@@ -4378,13 +4383,29 @@ export default function App() {
               </button>
             </div>
 
-            {/* Embed Video Iframe Container */}
-            <div className="relative w-full h-full flex-1 overflow-hidden bg-black flex items-center justify-center">
+            {/* Embed Video Iframe Container with Auto Landscape Rotation Support */}
+            <div 
+              className={`bg-black flex items-center justify-center transition-all duration-300 ${
+                videoRotation !== 0
+                  ? 'fixed inset-0 z-[10000]' 
+                  : 'relative w-full h-full flex-1 overflow-hidden'
+              }`}
+              style={getRotationStyle()}
+            >
               {/* Context guard to prevent direct saving */}
               <div 
                 onContextMenu={(e) => e.preventDefault()}
                 className="absolute inset-0 z-50 pointer-events-none"
               />
+
+              {/* Floating 'X' Close Button overlaid directly on the rotated video view */}
+              <button
+                onClick={handleCloseVideo}
+                className="absolute top-4 right-4 z-[10001] bg-rose-600 hover:bg-rose-700 text-white p-3 rounded-full border border-rose-400/50 shadow-2xl transition cursor-pointer flex items-center justify-center active:scale-95"
+                title="Close Video (भिडियो बन्द गर्नुहोस्)"
+              >
+                <X className="w-6 h-6 stroke-[3]" />
+              </button>
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
               <div 

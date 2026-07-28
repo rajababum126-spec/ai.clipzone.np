@@ -2924,18 +2924,24 @@ export default function App() {
                       className="absolute inset-0 z-50 pointer-events-none"
                     />
 
-                    {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles and share links */}
+                    {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles, share links and copy actions */}
                     <div 
-                      className="absolute top-0 inset-x-0 h-24 bg-transparent z-45 cursor-default pointer-events-auto" 
+                      className="absolute top-0 inset-x-0 h-28 md:h-32 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                       title="Secure Player Header" 
-                      onContextMenu={(e) => e.preventDefault()}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     />
                     <div 
-                      className="absolute bottom-0 right-0 w-64 h-20 bg-transparent z-45 cursor-default pointer-events-auto" 
+                      className="absolute bottom-0 right-0 w-80 h-24 md:h-28 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                       title="Secure Player Branding Block" 
-                      onContextMenu={(e) => e.preventDefault()}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     />
 
                     {/* Watermark to discourage screen records */}
@@ -4455,16 +4461,22 @@ export default function App() {
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles, share links and copy actions */}
               <div 
-                className="absolute top-0 inset-x-0 h-24 bg-transparent z-45 cursor-default pointer-events-auto" 
+                className="absolute top-0 inset-x-0 h-28 md:h-36 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                 title="Protected Player Header" 
-                onContextMenu={(e) => e.preventDefault()}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
               />
               <div 
-                className="absolute bottom-0 right-0 w-72 h-24 bg-transparent z-45 cursor-default pointer-events-auto" 
+                className="absolute bottom-0 right-0 w-80 md:w-96 h-28 md:h-32 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                 title="Protected Player Branding Block" 
-                onContextMenu={(e) => e.preventDefault()}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
               />
 
               {/* Watermark in fullscreen */}

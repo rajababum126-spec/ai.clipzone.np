@@ -49,7 +49,7 @@ import {
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
 import { Course, ChatMessage, CourseVideo } from './types';
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
@@ -270,7 +270,10 @@ export default function App() {
           const dbCourses: Course[] = [];
           querySnapshot.forEach((docSnap) => {
             const course = docSnap.data() as Course;
-            if (!deletedCourseIds.includes(course.id)) {
+            if (deletedCourseIds.includes(course.id)) {
+              // Permanently remove lingering document from Firestore if found
+              deleteDoc(doc(db, 'courses', docSnap.id)).catch(err => console.warn('Lingering course delete error:', err));
+            } else {
               dbCourses.push(course);
             }
           });
@@ -1520,17 +1523,9 @@ export default function App() {
 
       // 3. Persist deleted courseId in system config so it is never re-seeded
       try {
-        const configSnap = await getDoc(doc(db, 'system', 'config'));
-        let deletedCourseIds: string[] = [];
-        if (configSnap.exists() && Array.isArray(configSnap.data().deletedCourseIds)) {
-          deletedCourseIds = configSnap.data().deletedCourseIds;
-        }
-        if (!deletedCourseIds.includes(courseId)) {
-          deletedCourseIds.push(courseId);
-        }
         await setDoc(doc(db, 'system', 'config'), {
           courses_seeded: true,
-          deletedCourseIds
+          deletedCourseIds: arrayUnion(courseId)
         }, { merge: true });
       } catch (e) {
         console.warn('Config deleted ids set error:', e);

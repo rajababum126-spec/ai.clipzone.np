@@ -2053,12 +2053,10 @@ export default function App() {
       </div>
 
       {/* Main Container for Course List */}
-      <main className="max-w-6xl mx-auto px-4 py-12">
-
-
+      <main className="max-w-6xl mx-auto px-4 pt-3 pb-12">
 
         {/* Course Catalog Title & Grid Section */}
-        <section id="courses-section" className="pt-10 scroll-mt-24">
+        <section id="courses-section" className="pt-2 scroll-mt-24">
           {currentView === 'home' && (
             <div className="text-center mb-12">
               <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-2">

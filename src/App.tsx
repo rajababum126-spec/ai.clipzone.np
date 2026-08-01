@@ -396,22 +396,19 @@ export default function App() {
             if (keyData.courseId) {
               updatedCourseIds.push(keyData.courseId);
             }
-          } else {
+          } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
             sessionTerminated = true;
             terminatedCode = code;
           }
-        } else {
-          sessionTerminated = true;
-          terminatedCode = code;
         }
       }
 
+      localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedActiveCodes));
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourseIds));
+      setActiveCourseIds(updatedCourseIds);
+
       if (sessionTerminated) {
-        localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedActiveCodes));
-        localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourseIds));
-        setActiveCourseIds(updatedCourseIds);
         showToast(`यो डिभाइसको सेसन समाप्त भयो! कोड ${terminatedCode} अर्को डिभाइसमा एक्टिभ गरिएको छ। (Session ended! Code ${terminatedCode} has been logged in on another device.)`, 'error');
-        
         if (currentUser && currentUser.uid && !currentUser.uid.startsWith('local_')) {
           await fetchUserActiveKeys(currentUser);
         }
@@ -521,18 +518,9 @@ export default function App() {
         }
       });
 
-      // Merge with locally stored course activations as fallback backup!
-      const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-      localActivated.forEach((id: string) => {
-        if (!activeIds.includes(id)) {
-          activeIds.push(id);
-        }
-      });
-
       setUserActivationKeys(keys);
-      if (keys.length > 0) {
-        localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(keys));
-      }
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(keys));
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(activeIds));
       setActiveCourseIds(activeIds);
     } catch (err) {
       console.error('Error fetching student keys:', err);

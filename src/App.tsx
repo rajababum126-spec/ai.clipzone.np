@@ -325,17 +325,22 @@ export default function App() {
         if (serverResetAt > 0 && serverResetAt > localLastReset) {
           localStorage.setItem('clipzone_last_session_reset', String(serverResetAt));
           
-          // Clear active user student sessions and activated courses
+          // Sign out Firebase Auth silently
+          signOut(auth).catch(() => {});
+
+          // Clear active user student sessions and activated courses silently
           localStorage.removeItem('clipzone_student_name');
           localStorage.removeItem('clipzone_student_uid');
           localStorage.removeItem('clipzone_local_activated_courses');
           localStorage.removeItem('clipzone_active_codes');
           localStorage.removeItem('clipzone_activated_keys_info');
           
+          setCurrentUser(null);
+          setUserActivationKeys([]);
           setActiveCourseIds([]);
           setAuthName('');
           
-          showToast('⚠️ एडमिनद्वारा सबै युजर डिभाइस र सेसन लगआउट गराइएको छ। (All active user sessions logged out by admin.)', 'info');
+          // Silent logout - no toast or notification displayed to the user
         }
       }
     }, (err) => {
@@ -928,25 +933,50 @@ export default function App() {
 
     try {
       const resetTime = Date.now();
+
+      // 1. Reset active devices and claimed user status on all activation keys in Firestore
+      try {
+        const keysSnap = await getDocs(collection(db, 'activation_keys'));
+        for (const kDoc of keysSnap.docs) {
+          const kData = kDoc.data();
+          if (kData.activeDeviceId || kData.claimedByUid) {
+            await updateDoc(doc(db, 'activation_keys', kDoc.id), {
+              activeDeviceId: '',
+              claimedByUid: ''
+            });
+          }
+        }
+      } catch (keyResetErr) {
+        console.warn('Error resetting activation key devices in Firestore:', keyResetErr);
+      }
+
+      // 2. Set global session reset timestamp in system config
       await setDoc(doc(db, 'system', 'config'), {
         global_session_reset_at: resetTime,
         courses_seeded: true
       }, { merge: true });
 
-      // Save acknowledged reset time for current device
+      // Save acknowledged reset time for current admin device
       localStorage.setItem('clipzone_last_session_reset', String(resetTime));
 
-      // Reset local active sessions
+      // 3. Reset local student active sessions on current device silently
+      signOut(auth).catch(() => {});
       localStorage.removeItem('clipzone_student_name');
       localStorage.removeItem('clipzone_student_uid');
       localStorage.removeItem('clipzone_local_activated_courses');
       localStorage.removeItem('clipzone_active_codes');
       localStorage.removeItem('clipzone_activated_keys_info');
+      setCurrentUser(null);
+      setUserActivationKeys([]);
       setActiveCourseIds([]);
       setAuthName('');
 
       setShowLogoutConfirmModal(false);
       setLogoutSecretCodeInput('');
+
+      // Refresh admin key list
+      fetchAdminKeys();
+
       showToast('⚡ सफलता: प्लेटफर्मका सबै युजर डिभाइस र सेसनहरु लगआउट गराइयो! (All active user devices & sessions logged out!)', 'success');
     } catch (err) {
       console.error('Failed to reset all user sessions:', err);

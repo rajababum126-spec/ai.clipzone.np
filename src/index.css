@@ -16,3 +16,9 @@
   font-family: 'Playfair Display', Georgia, serif !important;
 }
 
+@media (max-width: 640px) {
+  html {
+    font-size: 88%;
+  }
+}
+

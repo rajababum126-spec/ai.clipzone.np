@@ -57,6 +57,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Security rules for system configuration & global session resets
+    match /system/{doc} {
+      allow read, write: if true;
+    }
+
     // Global default catch-all: deny all other paths
     match /{document=**} {
       allow read, write: if false;

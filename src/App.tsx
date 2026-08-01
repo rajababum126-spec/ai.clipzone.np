@@ -43,12 +43,13 @@ import {
   Smartphone,
   Share2,
   Award,
-  RotateCw
+  RotateCw,
+  LogOut
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
 import { Course, ChatMessage, CourseVideo } from './types';
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
@@ -139,6 +140,8 @@ export default function App() {
     return localStorage.getItem('clipzone_admin_activated') === 'true';
   });
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState(false);
+  const [logoutSecretCodeInput, setLogoutSecretCodeInput] = useState('');
 
   // Student Authentication & Course Activation states
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -309,6 +312,37 @@ export default function App() {
       }
     };
     fetchCourses();
+  }, []);
+
+  // Realtime listener for global admin session logout commands across all user devices
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'system', 'config'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const serverResetAt = data.global_session_reset_at || 0;
+        const localLastReset = Number(localStorage.getItem('clipzone_last_session_reset') || 0);
+
+        if (serverResetAt > 0 && serverResetAt > localLastReset) {
+          localStorage.setItem('clipzone_last_session_reset', String(serverResetAt));
+          
+          // Clear active user student sessions and activated courses
+          localStorage.removeItem('clipzone_student_name');
+          localStorage.removeItem('clipzone_student_uid');
+          localStorage.removeItem('clipzone_local_activated_courses');
+          localStorage.removeItem('clipzone_active_codes');
+          localStorage.removeItem('clipzone_activated_keys_info');
+          
+          setActiveCourseIds([]);
+          setAuthName('');
+          
+          showToast('⚠️ एडमिनद्वारा सबै युजर डिभाइस र सेसन लगआउट गराइएको छ। (All active user sessions logged out by admin.)', 'info');
+        }
+      }
+    }, (err) => {
+      console.warn('Realtime session reset listener error:', err);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const getOrCreateDeviceId = () => {
@@ -880,6 +914,43 @@ export default function App() {
     } catch (err) {
       console.error('Failed to delete key:', err);
       showToast('Failed to delete key from database.', 'error');
+    }
+  };
+
+  // ADMIN HANDLER: FORCE LOGOUT ALL USER SESSIONS ACROSS ALL DEVICES
+  const handleExecuteLogoutAllUserSessions = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (logoutSecretCodeInput.trim().toUpperCase() !== 'AI12X') {
+      showToast('❌ गलत सेक्रेट कोड! सेसन लगआउट गर्न सकिएन। (Required code: AI12X)', 'error');
+      return;
+    }
+
+    try {
+      const resetTime = Date.now();
+      await setDoc(doc(db, 'system', 'config'), {
+        global_session_reset_at: resetTime,
+        courses_seeded: true
+      }, { merge: true });
+
+      // Save acknowledged reset time for current device
+      localStorage.setItem('clipzone_last_session_reset', String(resetTime));
+
+      // Reset local active sessions
+      localStorage.removeItem('clipzone_student_name');
+      localStorage.removeItem('clipzone_student_uid');
+      localStorage.removeItem('clipzone_local_activated_courses');
+      localStorage.removeItem('clipzone_active_codes');
+      localStorage.removeItem('clipzone_activated_keys_info');
+      setActiveCourseIds([]);
+      setAuthName('');
+
+      setShowLogoutConfirmModal(false);
+      setLogoutSecretCodeInput('');
+      showToast('⚡ सफलता: प्लेटफर्मका सबै युजर डिभाइस र सेसनहरु लगआउट गराइयो! (All active user devices & sessions logged out!)', 'success');
+    } catch (err) {
+      console.error('Failed to reset all user sessions:', err);
+      showToast('सबै सेसन लगआउट गर्दा त्रुटि भयो।', 'error');
     }
   };
 
@@ -3388,99 +3459,6 @@ export default function App() {
                   </ul>
                 </div>
 
-                {/* CHAPTER-WISE CURRICULUM BREAKDOWN */}
-                <div className="mt-6 text-left">
-                  {(() => {
-                    const vList = selectedCourse.videos || [];
-                    const chaptersMap: Record<string, CourseVideo[]> = {};
-                    const chapterOrder: string[] = [];
-
-                    vList.forEach(v => {
-                      const chTitle = v.chapterTitle?.trim() || 'Chapter 1: Course Lectures';
-                      if (!chaptersMap[chTitle]) {
-                        chaptersMap[chTitle] = [];
-                        chapterOrder.push(chTitle);
-                      }
-                      chaptersMap[chTitle].push(v);
-                    });
-
-                    return (
-                      <div className="bg-slate-50 border border-purple-100 p-4 rounded-2xl space-y-3">
-                        <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-black text-xs">
-                              📚
-                            </span>
-                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                              कोर्षको च्याप्टर र भिडियो पाठहरु (Curriculum)
-                            </h4>
-                          </div>
-                          <span className="text-[11px] bg-purple-100 text-purple-900 font-extrabold px-2.5 py-0.5 rounded-full border border-purple-200">
-                            {chapterOrder.length} Chapters • {vList.length} Lectures
-                          </span>
-                        </div>
-
-                        <div className="space-y-2.5">
-                          {chapterOrder.map((chName, cIdx) => {
-                            const isExpanded = !!openDetailChapters[chName];
-                            return (
-                              <div key={cIdx} className="bg-white border border-purple-200/90 rounded-xl overflow-hidden transition shadow-2xs">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenDetailChapters(prev => ({
-                                      ...prev,
-                                      [chName]: !prev[chName]
-                                    }));
-                                  }}
-                                  className="w-full text-left p-3.5 bg-gradient-to-r from-purple-50/80 via-white to-slate-50 hover:from-purple-100/80 hover:to-indigo-50 cursor-pointer font-extrabold text-xs text-slate-800 flex items-center justify-between transition"
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                                    <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-700 to-indigo-800 text-white flex items-center justify-center text-[10px] font-black shrink-0 shadow-xs">
-                                      {cIdx + 1}
-                                    </span>
-                                    <div className="min-w-0">
-                                      <span className="truncate text-slate-900 font-black block text-xs">{chName}</span>
-                                      <span className="text-[10px] text-purple-700 font-bold block mt-0.5">
-                                        {isExpanded ? '▲ बन्द गर्नुहोस् (Click to collapse)' : '👇 क्लिक गरी भिडियो पाठहरु हेर्नुहोस् (Click to view videos)'}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-[10px] bg-purple-100/90 text-purple-900 px-2.5 py-1 rounded-lg font-black border border-purple-200 shadow-2xs">
-                                      {chaptersMap[chName].length} Videos
-                                    </span>
-                                    <ChevronDown className={`w-4 h-4 text-purple-600 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-amber-600' : ''}`} />
-                                  </div>
-                                </button>
-
-                                {isExpanded && (
-                                  <div className="p-3 bg-slate-50/80 space-y-1.5 border-t border-purple-100">
-                                    {chaptersMap[chName].map((v, vIdx) => (
-                                      <div key={vIdx} className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white hover:bg-purple-50/70 border border-slate-200/80 transition shadow-2xs">
-                                        <span className="font-semibold text-slate-800 flex items-center gap-2 min-w-0 pr-2">
-                                          <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-[10px] shrink-0 border border-purple-200">
-                                            ▶
-                                          </span>
-                                          <span className="truncate">{v.title}</span>
-                                        </span>
-                                        <span className="text-[10px] text-slate-600 font-bold shrink-0 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                                          ⏱️ {v.duration} min
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
                 {/* Secure purchase assurances */}
                 <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 text-xs text-slate-600 font-semibold text-left">
                   <ShieldCheck className="w-6 h-6 text-emerald-500 shrink-0" />
@@ -3504,40 +3482,6 @@ export default function App() {
                   >
                     <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)</span>
                   </button>
-                </div>
-
-                {/* Direct Activation Code Input Form inside Course Modal */}
-                <div className="mt-6 pt-6 border-t border-slate-100 bg-gradient-to-br from-purple-950 via-slate-900 to-indigo-950 p-4.5 rounded-2xl text-white shadow-xl space-y-3 border border-purple-500/30 text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center font-black text-xs border border-amber-400/30">
-                      🔑
-                    </span>
-                    <h4 className="text-xs font-extrabold text-white">
-                      Already have code? Type & Unlock (सेक्रेट कोड हाल्नुहोस्)
-                    </h4>
-                  </div>
-
-                  <form 
-                    onSubmit={async (e) => {
-                      await handleClaimActivationCode(e);
-                    }} 
-                    className="flex flex-col sm:flex-row gap-2"
-                  >
-                    <input 
-                      type="text"
-                      value={activationCodeInput}
-                      onChange={(e) => setActivationCodeInput(e.target.value)}
-                      placeholder="CLIP-XXXXXX"
-                      className="flex-1 bg-slate-900/90 border border-purple-400/40 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs font-mono font-black uppercase text-white placeholder-slate-400 outline-hidden tracking-widest text-center sm:text-left shadow-inner"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isActivating || !activationCodeInput.trim()}
-                      className="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 shadow-md active:scale-98"
-                    >
-                      {isActivating ? 'Activating...' : 'Unlock Now 🚀'}
-                    </button>
-                  </form>
                 </div>
               </motion.div>
             )}
@@ -4442,12 +4386,124 @@ export default function App() {
 
               </div>
 
+              {/* Global Session Reset Emergency Controls */}
+              <div className="mt-8 bg-gradient-to-r from-rose-950 via-slate-900 to-red-950 rounded-2xl p-5 border border-rose-500/30 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+                <div className="space-y-1 text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center font-black text-xs border border-rose-500/40 shrink-0">
+                      🚨
+                    </span>
+                    <h4 className="text-sm font-black text-white">
+                      Logout All User Devices (सबै डिभाइस सेसन लगआउट)
+                    </h4>
+                  </div>
+                  <p className="text-xs text-rose-200/80 font-medium">
+                    वेबसाइटमा समस्या आउँदा वा नयाँ अपडेट पछि सबै युजर/विद्यार्थीहरुका Active Devices र Sessions एकैपटक स्वतः लगआउट गराउनुहोस्।
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLogoutSecretCodeInput('');
+                    setShowLogoutConfirmModal(true);
+                  }}
+                  className="bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider transition shadow-lg cursor-pointer shrink-0 active:scale-95 border border-rose-400/30 flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout All User Devices 🚀
+                </button>
+              </div>
+
               <button 
                 onClick={() => setShowAdminDashboard(false)}
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition mt-8 cursor-pointer"
               >
                 Close Key Manager
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CONFIRM LOGOUT ALL USER DEVICES MODAL */}
+      <AnimatePresence>
+        {showLogoutConfirmModal && (
+          <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLogoutConfirmModal(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-slate-900 border border-rose-500/40 rounded-3xl p-6 sm:p-8 text-white shadow-2xl space-y-6 text-left z-10"
+            >
+              <div className="flex items-center justify-between border-b border-rose-500/20 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center font-black text-lg border border-rose-500/40 shrink-0">
+                    🚨
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">Logout All User Devices</h3>
+                    <p className="text-xs text-rose-300 font-medium">सुरक्षा पुष्टि (Security Verification)</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowLogoutConfirmModal(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-4 bg-rose-950/40 border border-rose-500/30 rounded-2xl text-xs text-rose-200 space-y-2">
+                <p className="font-extrabold text-rose-100">
+                  ⚠️ एडमिन चेतावनी (Admin Confirmation):
+                </p>
+                <p className="leading-relaxed">
+                  के तपाईं साच्चैं प्लेटफर्मका सम्पूर्ण विद्यार्थी तथा युजरहरुका Active Devices र Sessions लगआउट गराउन चाहनुहुन्छ?
+                </p>
+              </div>
+
+              <form onSubmit={handleExecuteLogoutAllUserSessions} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-300 mb-2">
+                    Enter Admin Secret Code ("AI12X"):
+                  </label>
+                  <input
+                    type="text"
+                    value={logoutSecretCodeInput}
+                    onChange={(e) => setLogoutSecretCodeInput(e.target.value)}
+                    placeholder="AI12X"
+                    autoFocus
+                    className="w-full bg-slate-950 border border-purple-500/40 focus:border-rose-500 rounded-xl px-4 py-3 text-sm font-mono font-black uppercase tracking-widest text-white placeholder-slate-600 outline-hidden text-center shadow-inner"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoutConfirmModal(false)}
+                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!logoutSecretCodeInput.trim()}
+                    className="flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white font-black py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-lg active:scale-98 flex items-center justify-center gap-1.5"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Confirm Logout
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

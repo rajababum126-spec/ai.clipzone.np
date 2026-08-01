@@ -162,15 +162,35 @@ export default function App() {
   const [courses, setCourses] = useState<Course[]>(() => {
     const cached = localStorage.getItem('clipzone_dynamic_courses');
     const wasInitialized = localStorage.getItem('clipzone_courses_initialized');
+    const cachedDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+    
     if (cached) {
       try {
-        return JSON.parse(cached);
+        const parsed: Course[] = JSON.parse(cached);
+        return parsed.filter(c => !cachedDeleted.includes(c.id));
       } catch (e) {
-        return wasInitialized ? [] : COURSES;
+        return wasInitialized ? [] : COURSES.filter(c => !cachedDeleted.includes(c.id));
       }
     }
-    return wasInitialized ? [] : COURSES;
+    return wasInitialized ? [] : COURSES.filter(c => !cachedDeleted.includes(c.id));
   });
+
+  // Keep activeCourseIds strictly in sync with available non-deleted courses
+  useEffect(() => {
+    try {
+      const cachedDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+      setActiveCourseIds(prev => {
+        const valid = prev.filter(id => !cachedDeleted.includes(id) && courses.some(c => c.id === id));
+        if (valid.length !== prev.length) {
+          localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(valid));
+          return valid;
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.warn('Active courses cleanup err:', e);
+    }
+  }, [courses]);
 
   // Course Add/Edit modal state
   const [showCourseFormModal, setShowCourseFormModal] = useState(false);
@@ -195,49 +215,61 @@ export default function App() {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        // Check if system config already initialized courses
         let isSeeded = false;
+        let deletedCourseIds: string[] = [];
         try {
           const configSnap = await getDoc(doc(db, 'system', 'config'));
-          if (configSnap.exists() && configSnap.data().courses_seeded) {
-            isSeeded = true;
+          if (configSnap.exists()) {
+            const data = configSnap.data();
+            if (data.courses_seeded) isSeeded = true;
+            if (Array.isArray(data.deletedCourseIds)) {
+              deletedCourseIds = data.deletedCourseIds;
+            }
           }
         } catch (configErr) {
           console.warn('System config check:', configErr);
         }
 
+        // Merge with locally stored deleted course IDs
+        const localDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+        deletedCourseIds = Array.from(new Set([...deletedCourseIds, ...localDeleted]));
+
         const querySnapshot = await getDocs(collection(db, 'courses'));
 
         if (!isSeeded && querySnapshot.empty) {
-          // First time database initialization: seed default static COURSES with initial order
-          const seeded = COURSES.map((course, idx) => ({
-            ...course,
-            order: idx
-          }));
+          // First time database initialization: seed default static COURSES minus any deleted
+          const seeded = COURSES
+            .filter(course => !deletedCourseIds.includes(course.id))
+            .map((course, idx) => ({
+              ...course,
+              order: idx
+            }));
           for (const course of seeded) {
             await setDoc(doc(db, 'courses', course.id), course);
           }
           try {
-            await setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true });
+            await setDoc(doc(db, 'system', 'config'), { courses_seeded: true, deletedCourseIds }, { merge: true });
           } catch (e) {
             console.warn('Could not update system config:', e);
           }
           setCourses(seeded);
           localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(seeded));
           localStorage.setItem('clipzone_courses_initialized', 'true');
+          localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(deletedCourseIds));
         } else {
           // If docs exist or system was already seeded, do NOT re-seed deleted courses
-          if (!isSeeded && !querySnapshot.empty) {
-            try {
-              await setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true });
-            } catch (e) {
-              console.warn('Could not update system config:', e);
-            }
+          try {
+            await setDoc(doc(db, 'system', 'config'), { courses_seeded: true, deletedCourseIds }, { merge: true });
+          } catch (e) {
+            console.warn('Could not update system config:', e);
           }
 
           const dbCourses: Course[] = [];
           querySnapshot.forEach((docSnap) => {
-            dbCourses.push(docSnap.data() as Course);
+            const course = docSnap.data() as Course;
+            if (!deletedCourseIds.includes(course.id)) {
+              dbCourses.push(course);
+            }
           });
 
           // Sort by order
@@ -249,20 +281,24 @@ export default function App() {
           setCourses(sortedCourses);
           localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
           localStorage.setItem('clipzone_courses_initialized', 'true');
+          localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(deletedCourseIds));
         }
       } catch (err: any) {
         console.warn('Failed to load courses from Firestore. Falling back to local cache:', err);
         
         const cached = localStorage.getItem('clipzone_dynamic_courses');
         const wasInitialized = localStorage.getItem('clipzone_courses_initialized');
+        const localDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+
         if (cached) {
           try {
-            setCourses(JSON.parse(cached));
+            const parsed: Course[] = JSON.parse(cached);
+            setCourses(parsed.filter(c => !localDeleted.includes(c.id)));
           } catch (jsonErr) {
-            setCourses(wasInitialized ? [] : COURSES);
+            setCourses(wasInitialized ? [] : COURSES.filter(c => !localDeleted.includes(c.id)));
           }
         } else {
-          setCourses(wasInitialized ? [] : COURSES);
+          setCourses(wasInitialized ? [] : COURSES.filter(c => !localDeleted.includes(c.id)));
         }
 
         if (err && err.code === 'permission-denied') {
@@ -1374,13 +1410,57 @@ export default function App() {
 
   // Delete Course
   const handleDeleteCourse = async (courseId: string) => {
-    if (!window.confirm('Are you sure you want to remove this course? This action is permanent.')) {
+    if (!window.confirm('Are you sure you want to remove this course? This action is permanent and cannot be restored.')) {
       return;
     }
 
     try {
+      // 1. Delete course doc from Firestore
       await deleteDoc(doc(db, 'courses', courseId));
       
+      // 2. Delete any secret activation keys created for this course
+      try {
+        const keysQuery = query(collection(db, 'activation_keys'), where('courseId', '==', courseId));
+        const keysSnap = await getDocs(keysQuery);
+        for (const kDoc of keysSnap.docs) {
+          await deleteDoc(doc(db, 'activation_keys', kDoc.id));
+        }
+      } catch (keyErr) {
+        console.warn('Keys cleanup error on course delete:', keyErr);
+      }
+
+      // 3. Persist deleted courseId in system config so it is never re-seeded
+      try {
+        const configSnap = await getDoc(doc(db, 'system', 'config'));
+        let deletedCourseIds: string[] = [];
+        if (configSnap.exists() && Array.isArray(configSnap.data().deletedCourseIds)) {
+          deletedCourseIds = configSnap.data().deletedCourseIds;
+        }
+        if (!deletedCourseIds.includes(courseId)) {
+          deletedCourseIds.push(courseId);
+        }
+        await setDoc(doc(db, 'system', 'config'), {
+          courses_seeded: true,
+          deletedCourseIds
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Config deleted ids set error:', e);
+      }
+
+      // 4. Save deleted ID in local storage blacklists
+      const localDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
+      if (!localDeleted.includes(courseId)) {
+        localDeleted.push(courseId);
+        localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(localDeleted));
+      }
+
+      // 5. Instantly clean up active activated courses state and storage
+      const localActivated: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      const updatedActivated = localActivated.filter((id: string) => id !== courseId);
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
+      setActiveCourseIds(prev => prev.filter(id => id !== courseId));
+
+      // 6. Update local state and dynamic cache
       setCourses(prev => {
         const updatedList = prev.filter(c => c.id !== courseId);
         localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(updatedList));
@@ -1388,13 +1468,7 @@ export default function App() {
         return updatedList;
       });
 
-      try {
-        await setDoc(doc(db, 'system', 'config'), { courses_seeded: true }, { merge: true });
-      } catch (e) {
-        console.warn('Config set error:', e);
-      }
-
-      showToast('Course removed successfully!', 'success');
+      showToast('कोर्ष स्थायी रूपमा हटाइयो! (Course permanently deleted!)', 'success');
     } catch (err) {
       console.error('Failed to delete course:', err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -2842,7 +2916,7 @@ export default function App() {
                     className="w-full bg-white border border-slate-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-3 text-sm transition outline-hidden font-semibold text-slate-800"
                   >
                     <option value="General Inquiry / सामान्य सोधपुछ">General Inquiry / सामान्य सोधपुछ</option>
-                    {COURSES.map((course) => (
+                    {courses.map((course) => (
                       <option key={course.id} value={`${course.title} (${course.price})`}>
                         {course.title} — {course.price}
                       </option>

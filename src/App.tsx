@@ -705,8 +705,8 @@ export default function App() {
       return;
     }
 
-    // Check if code is the secret Admin activation code "AI12XCLIP" (or legacy "AI12X")
-    if (cleanCode === 'AI12XCLIP' || cleanCode === 'AI12X') {
+    // Check if code is the secret Admin activation code "AI12XCLIP"
+    if (cleanCode === 'AI12XCLIP') {
       setIsAdminActivated(true);
       localStorage.setItem('clipzone_admin_activated', 'true');
       
@@ -937,7 +937,7 @@ export default function App() {
     if (e) e.preventDefault();
 
     const inputCode = logoutSecretCodeInput.trim().toUpperCase();
-    if (inputCode !== 'AI12XCLIP' && inputCode !== 'AI12X') {
+    if (inputCode !== 'AI12XCLIP') {
       showToast('❌ अमान्य सेक्रेट कोड! सेसन लगआउट गर्न सकिएन। (Invalid secret code)', 'error');
       return;
     }
@@ -4032,7 +4032,7 @@ export default function App() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       const code = adminCodeInput.trim().toUpperCase();
-                      if (code === 'AI12XCLIP' || code === 'AI12X') {
+                      if (code === 'AI12XCLIP') {
                         setIsAdminActivated(true);
                         localStorage.setItem('clipzone_admin_activated', 'true');
                         setShowAdminLoginModal(false);
@@ -4050,7 +4050,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     const code = adminCodeInput.trim().toUpperCase();
-                    if (code === 'AI12XCLIP' || code === 'AI12X') {
+                    if (code === 'AI12XCLIP') {
                       setIsAdminActivated(true);
                       localStorage.setItem('clipzone_admin_activated', 'true');
                       setShowAdminLoginModal(false);

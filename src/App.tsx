@@ -1858,9 +1858,16 @@ export default function App() {
       <div className="sticky top-0 z-[100] w-full bg-linear-to-r from-purple-800 via-indigo-900 to-purple-900 text-white shadow-md border-b border-purple-700/30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div 
-            onClick={() => setShowAdminMenu(!showAdminMenu)}
+            onClick={() => {
+              if (isAdminActivated) {
+                setShowAdminMenu(!showAdminMenu);
+              } else {
+                setCurrentView('home');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }}
             className="flex items-center gap-3 cursor-pointer select-none relative group"
-            title="Click logo for Admin options"
+            title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
           >
             <img 
               src={LOGO_DATA_URL} 
@@ -1874,55 +1881,40 @@ export default function App() {
               )}
             </h1>
 
-            {showAdminMenu && (
+            {isAdminActivated && showAdminMenu && (
               <div className="absolute top-12 left-0 z-[1000] w-52 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-1.5 font-bold text-xs text-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
-                {!isAdminActivated ? (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowAdminMenu(false);
-                      setShowAdminLoginModal(true);
-                    }}
-                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    ⚙️ Admin Login
-                  </button>
-                ) : (
-                  <>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowAdminMenu(false);
-                        handleCreateCourseClick();
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
-                    >
-                      ➕ Add New Course
-                    </button>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowAdminMenu(false);
-                        setShowAdminDashboard(true);
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
-                    >
-                      🗝️ Code Generator
-                    </button>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsAdminActivated(false);
-                        localStorage.removeItem('clipzone_admin_activated');
-                        setShowAdminMenu(false);
-                        showToast('Logged out of Admin mode', 'info');
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-950/30 hover:text-rose-300 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800/80 mt-1"
-                    >
-                      🚪 Exit Admin Mode
-                    </button>
-                  </>
-                )}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAdminMenu(false);
+                    handleCreateCourseClick();
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  ➕ Add New Course
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAdminMenu(false);
+                    setShowAdminDashboard(true);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  🗝️ Code Generator
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsAdminActivated(false);
+                    localStorage.removeItem('clipzone_admin_activated');
+                    setShowAdminMenu(false);
+                    showToast('Logged out of Admin mode', 'info');
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-950/30 hover:text-rose-300 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800/80 mt-1"
+                >
+                  🚪 Exit Admin Mode
+                </button>
               </div>
             )}
           </div>

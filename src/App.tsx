@@ -47,7 +47,7 @@ import {
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
-import { Course, ChatMessage } from './types';
+import { Course, ChatMessage, CourseVideo } from './types';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -904,6 +904,8 @@ export default function App() {
   };
   // QR modal state
   const [showQrModal, setShowQrModal] = useState(false);
+  // Quick Code Activation Modal State for Students
+  const [showCodeInputModal, setShowCodeInputModal] = useState(false);
   // User navigation menu state
   const [showUserMenu, setShowUserMenu] = useState(false);
   // User profile modal state
@@ -918,6 +920,8 @@ export default function App() {
 
 
   const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
+  const [openDetailChapters, setOpenDetailChapters] = useState<Record<string, boolean>>({});
   const [activationCodeInput, setActivationCodeInput] = useState('');
   const [isActivating, setIsActivating] = useState(false);
   const [pageVideoIndexes, setPageVideoIndexes] = useState<Record<string, number>>({});
@@ -959,6 +963,49 @@ export default function App() {
     };
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  // Strict Global Security: Block Copy, Cut, Drag, Context Menu, and Copy Shortcuts
+  useEffect(() => {
+    const blockCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      if (e.clipboardData) {
+        e.clipboardData.setData('text/plain', 'ClipZone Nepal - Link Sharing Disabled');
+      }
+    };
+
+    const blockKeyCombos = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ['c', 'C', 'u', 'U', 's', 'S', 'a', 'A', 'x', 'X', 'i', 'I'].includes(e.key)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const blockContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const blockDrag = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('copy', blockCopy, true);
+    window.addEventListener('cut', blockCopy, true);
+    window.addEventListener('keydown', blockKeyCombos, true);
+    window.addEventListener('contextmenu', blockContextMenu, true);
+    window.addEventListener('dragstart', blockDrag, true);
+
+    return () => {
+      window.removeEventListener('copy', blockCopy, true);
+      window.removeEventListener('cut', blockCopy, true);
+      window.removeEventListener('keydown', blockKeyCombos, true);
+      window.removeEventListener('contextmenu', blockContextMenu, true);
+      window.removeEventListener('dragstart', blockDrag, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -1185,6 +1232,7 @@ export default function App() {
   // Contact Form state
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [contactCourse, setContactCourse] = useState('General Inquiry / सामान्य सोधपुछ');
   const [contactMsg, setContactMsg] = useState('');
 
 
@@ -1445,13 +1493,14 @@ export default function App() {
       showToast('कृपया तपाईंको नाम र सन्देश लेख्नुहोस्!', 'error');
       return;
     }
-    const fullMessage = `Name: ${contactName}\nPhone: ${contactPhone}\nMessage: ${contactMsg}`;
+    const fullMessage = `Name: ${contactName}\nPhone: ${contactPhone || 'N/A'}\nSelected Course: ${contactCourse}\nMessage: ${contactMsg}`;
     const whatsappUrl = `https://wa.me/9779763323268?text=${encodeURIComponent(fullMessage)}`;
     window.open(whatsappUrl, '_blank');
     
     // Clear inputs
     setContactName('');
     setContactPhone('');
+    setContactCourse('General Inquiry / सामान्य सोधपुछ');
     setContactMsg('');
     showToast('तपाईंको सन्देश WhatsApp मा पठाइयो।', 'success');
   };
@@ -1862,6 +1911,7 @@ export default function App() {
               <p className="text-slate-500 mt-3 text-sm md:text-base">
                 तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
               </p>
+
             </div>
           )}
 
@@ -2121,10 +2171,24 @@ export default function App() {
                         )}
                       </div>
 
-                      <p className="text-slate-500 text-xs md:text-sm mt-3 font-semibold flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                        Language: {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')} • Includes Certificate
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2 mt-3">
+                        {(() => {
+                          const vList = course.videos || [];
+                          const chSet = new Set(vList.map(v => v.chapterTitle?.trim() || 'Chapter 1: Course Lectures'));
+                          return (
+                            <span className="bg-purple-100/80 text-purple-900 text-xs font-extrabold px-3 py-1 rounded-xl border border-purple-200/80 flex items-center gap-1.5 shadow-2xs">
+                              <span className="w-4 h-4 rounded-md bg-purple-600 text-white flex items-center justify-center text-[9px] font-black">📁</span>
+                              {chSet.size} Chapters ({vList.length} Video Lectures)
+                            </span>
+                          );
+                        })()}
+                        <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-xl border border-slate-200">
+                          🌐 {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
+                        </span>
+                        <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-xl border border-emerald-200">
+                          📜 Certificate
+                        </span>
+                      </div>
 
                       {/* Highlights checklist */}
                       <ul className="mt-6 space-y-2.5">
@@ -2771,6 +2835,21 @@ export default function App() {
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">कोर्ष छान्नुहोस् (Select Course) *</label>
+                  <select 
+                    value={contactCourse}
+                    onChange={(e) => setContactCourse(e.target.value)}
+                    className="w-full bg-white border border-slate-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-3 text-sm transition outline-hidden font-semibold text-slate-800"
+                  >
+                    <option value="General Inquiry / सामान्य सोधपुछ">General Inquiry / सामान्य सोधपुछ</option>
+                    {COURSES.map((course) => (
+                      <option key={course.id} value={`${course.title} (${course.price})`}>
+                        {course.title} — {course.price}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">तपाईंको सन्देश (Your Message) *</label>
                   <textarea 
                     value={contactMsg}
@@ -2895,7 +2974,15 @@ export default function App() {
                         <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-emerald-500/30">
                           🟢 Connected & Active
                         </span>
-                        <span className="text-xs text-slate-400 font-bold">Lecture Classroom</span>
+                        <button
+                          onClick={() => {
+                            setActivationCodeInput('');
+                            setShowCodeInputModal(true);
+                          }}
+                          className="bg-purple-600/60 hover:bg-purple-600 text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-full border border-purple-400/30 transition flex items-center gap-1 cursor-pointer"
+                        >
+                          🔑 + Add Course (कोड हाल्नुहोस्)
+                        </button>
                       </div>
                       {isAdminActivated && (
                         <button
@@ -2926,22 +3013,34 @@ export default function App() {
 
                     {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles, share links and copy actions */}
                     <div 
-                      className="absolute top-0 inset-x-0 h-28 md:h-32 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
+                      className="absolute top-0 inset-x-0 h-36 md:h-44 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                       title="Secure Player Header" 
                       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                       onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
                       onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
                       onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     />
                     <div 
-                      className="absolute bottom-0 right-0 w-80 h-24 md:h-28 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
+                      className="absolute bottom-0 right-0 w-96 md:w-[460px] h-32 md:h-36 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                       title="Secure Player Branding Block" 
                       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                       onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
                       onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
                       onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                    />
+                    <div 
+                      className="absolute bottom-0 left-0 w-64 h-28 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
+                      title="Secure Player Channel Block" 
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                      onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
                     />
 
                     {/* Watermark to discourage screen records */}
@@ -2952,7 +3051,7 @@ export default function App() {
                       </p>
                     </div>
 
-                    {/* YouTube non-cookie security iframe embed */}
+                    {/* YouTube non-cookie security iframe embed with scale crop to remove YouTube logos & brandings */}
                     {(() => {
                       const activePlaylist = selectedCourse.videos && selectedCourse.videos.length > 0 
                         ? selectedCourse.videos 
@@ -3029,48 +3128,134 @@ export default function App() {
                 </div>
 
                 {/* Right Area: Scrolling Playlist */}
-                <div className="w-full md:w-[320px] bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 p-6 flex flex-col justify-between max-h-full">
-                  <div className="space-y-4 flex-1 overflow-hidden flex flex-col text-left">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                      📖 Course Lecture Playlist
-                    </h4>
+                <div className="w-full md:w-[360px] bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 p-5 flex flex-col justify-between max-h-full">
+                  <div className="space-y-3 flex-1 overflow-hidden flex flex-col text-left">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        📖 Playlist & Chapters
+                      </h4>
+                      <span className="text-[10px] bg-purple-950 text-purple-300 font-extrabold px-2 py-0.5 rounded-md border border-purple-500/30">
+                        {selectedCourse.videos?.length || 1} Lectures
+                      </span>
+                    </div>
 
-                    {/* Playlist container scroll */}
-                    <div className="space-y-2 overflow-y-auto pr-1 flex-1 max-h-[300px] md:max-h-[380px]">
+                    {/* Chapter Accordions Scroll Container */}
+                    <div className="space-y-2 overflow-y-auto pr-1 flex-1 max-h-[320px] md:max-h-[400px]">
                       {(() => {
                         const list = selectedCourse.videos && selectedCourse.videos.length > 0 
                           ? selectedCourse.videos 
                           : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: '' }];
                         
-                        return list.map((video, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => {
-                              setCurrentVideoIndex(idx);
-                              showToast(`Loading lecture: ${video.title}`, 'info');
-                            }}
-                            className={`p-3 rounded-2xl border transition cursor-pointer flex items-start gap-3 text-xs ${
-                              currentVideoIndex === idx 
-                                ? 'bg-purple-900/45 border-purple-500/50 text-purple-200' 
-                                : 'bg-slate-950 hover:bg-slate-800 border-slate-800/80 text-slate-300'
-                            }`}
-                          >
-                            <div className="w-6 h-6 rounded-lg bg-slate-900 text-purple-400 border border-slate-800 flex items-center justify-center font-black shrink-0 text-[10px]">
-                              {currentVideoIndex === idx ? '▶️' : idx + 1}
+                        // Group videos by chapter
+                        const chaptersMap: Record<string, { video: CourseVideo; globalIndex: number }[]> = {};
+                        const chapterOrder: string[] = [];
+
+                        list.forEach((video, globalIdx) => {
+                          const chTitle = video.chapterTitle?.trim() || 'Chapter 1: Course Lectures';
+                          if (!chaptersMap[chTitle]) {
+                            chaptersMap[chTitle] = [];
+                            chapterOrder.push(chTitle);
+                          }
+                          chaptersMap[chTitle].push({ video, globalIndex: globalIdx });
+                        });
+
+                        return chapterOrder.map((chTitle, chIdx) => {
+                          const items = chaptersMap[chTitle];
+                          const isCurrentInThisChapter = items.some(item => item.globalIndex === currentVideoIndex);
+                          // Default to false unless explicitly toggled or active playing
+                          const isOpen = expandedChapters[chTitle] ?? false;
+
+                          return (
+                            <div key={chIdx} className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/80 shadow-xs">
+                              {/* Chapter Header */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpandedChapters(prev => ({
+                                    ...prev,
+                                    [chTitle]: !isOpen
+                                  }));
+                                }}
+                                className={`w-full text-left px-3 py-2.5 flex items-center justify-between font-sans transition cursor-pointer ${
+                                  isCurrentInThisChapter 
+                                    ? 'bg-purple-950/70 text-purple-200 border-b border-purple-500/30' 
+                                    : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800/90 border-b border-slate-800/60'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0 pr-2">
+                                  <span className="w-5 h-5 rounded-md bg-purple-500/20 text-purple-300 flex items-center justify-center text-[10px] font-black border border-purple-500/30 shrink-0">
+                                    📁
+                                  </span>
+                                  <span className="text-[11px] font-extrabold truncate text-white">{chTitle}</span>
+                                </div>
+                                
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-bold border border-slate-700">
+                                    {items.length} Videos
+                                  </span>
+                                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`} />
+                                </div>
+                              </button>
+
+                              {/* Chapter Video Items */}
+                              {isOpen && (
+                                <div className="p-1.5 space-y-1 bg-slate-950/60">
+                                  {items.map(({ video, globalIndex }) => {
+                                    const isSelected = currentVideoIndex === globalIndex;
+                                    return (
+                                      <div
+                                        key={globalIndex}
+                                        onClick={() => {
+                                          setCurrentVideoIndex(globalIndex);
+                                          showToast(`Loading: ${video.title}`, 'info');
+                                        }}
+                                        className={`p-2 rounded-lg border transition cursor-pointer flex items-start gap-2 text-xs ${
+                                          isSelected 
+                                            ? 'bg-gradient-to-r from-purple-900/70 to-indigo-900/70 border-purple-500/60 text-white shadow-xs' 
+                                            : 'bg-slate-900/60 hover:bg-slate-800/80 border-slate-800/60 text-slate-300'
+                                        }`}
+                                      >
+                                        <div className={`w-5 h-5 rounded flex items-center justify-center font-black shrink-0 text-[10px] mt-0.5 ${
+                                          isSelected ? 'bg-amber-400 text-slate-950 font-black shadow-2xs' : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                        }`}>
+                                          {isSelected ? '▶' : globalIndex + 1}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <h5 className={`font-bold leading-tight text-[11px] ${isSelected ? 'text-amber-300 font-extrabold' : 'text-slate-200'}`}>
+                                            {video.title || `Lecture ${globalIndex + 1}`}
+                                          </h5>
+                                          <div className="flex items-center justify-between mt-1 text-[9px]">
+                                            <span className="text-slate-400 font-medium">⏱️ {video.duration || '10:00'} min</span>
+                                            {isSelected && <span className="text-amber-400 font-black uppercase tracking-wider">Now Playing</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                            <div className="min-w-0">
-                              <h5 className="font-bold text-slate-100 truncate max-w-[200px]">{video.title || `Lecture ${idx+1}`}</h5>
-                              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">⏱️ {video.duration || '10:00'} min</p>
-                            </div>
-                          </div>
-                        ));
+                          );
+                        });
                       })()}
                     </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-slate-800 text-[10px] text-slate-500 font-semibold text-left space-y-1">
-                    <p>🔒 Security protocol fully active.</p>
-                    <p>⚠️ Unauthorized copying, distribution, or download of these course materials is strictly prohibited.</p>
+                  <div className="mt-4 pt-3 border-t border-slate-800 space-y-2 text-left">
+                    <button
+                      onClick={() => {
+                        setActivationCodeInput('');
+                        setShowCodeInputModal(true);
+                      }}
+                      className="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 border border-purple-400/30 shadow-md active:scale-98"
+                    >
+                      <span>🔑 Add Another Course (नयाँ कोर्ष जोड्नुहोस्)</span>
+                    </button>
+
+                    <div className="text-[10px] text-slate-500 font-semibold space-y-1">
+                      <p>🔒 Security protocol fully active.</p>
+                      <p>⚠️ Unauthorized copying, distribution, or download of these course materials is strictly prohibited.</p>
+                    </div>
                   </div>
                 </div>
 
@@ -3129,6 +3314,99 @@ export default function App() {
                   </ul>
                 </div>
 
+                {/* CHAPTER-WISE CURRICULUM BREAKDOWN */}
+                <div className="mt-6 text-left">
+                  {(() => {
+                    const vList = selectedCourse.videos || [];
+                    const chaptersMap: Record<string, CourseVideo[]> = {};
+                    const chapterOrder: string[] = [];
+
+                    vList.forEach(v => {
+                      const chTitle = v.chapterTitle?.trim() || 'Chapter 1: Course Lectures';
+                      if (!chaptersMap[chTitle]) {
+                        chaptersMap[chTitle] = [];
+                        chapterOrder.push(chTitle);
+                      }
+                      chaptersMap[chTitle].push(v);
+                    });
+
+                    return (
+                      <div className="bg-slate-50 border border-purple-100 p-4 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-black text-xs">
+                              📚
+                            </span>
+                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                              कोर्षको च्याप्टर र भिडियो पाठहरु (Curriculum)
+                            </h4>
+                          </div>
+                          <span className="text-[11px] bg-purple-100 text-purple-900 font-extrabold px-2.5 py-0.5 rounded-full border border-purple-200">
+                            {chapterOrder.length} Chapters • {vList.length} Lectures
+                          </span>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {chapterOrder.map((chName, cIdx) => {
+                            const isExpanded = !!openDetailChapters[chName];
+                            return (
+                              <div key={cIdx} className="bg-white border border-purple-200/90 rounded-xl overflow-hidden transition shadow-2xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenDetailChapters(prev => ({
+                                      ...prev,
+                                      [chName]: !prev[chName]
+                                    }));
+                                  }}
+                                  className="w-full text-left p-3.5 bg-gradient-to-r from-purple-50/80 via-white to-slate-50 hover:from-purple-100/80 hover:to-indigo-50 cursor-pointer font-extrabold text-xs text-slate-800 flex items-center justify-between transition"
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                    <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-700 to-indigo-800 text-white flex items-center justify-center text-[10px] font-black shrink-0 shadow-xs">
+                                      {cIdx + 1}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <span className="truncate text-slate-900 font-black block text-xs">{chName}</span>
+                                      <span className="text-[10px] text-purple-700 font-bold block mt-0.5">
+                                        {isExpanded ? '▲ बन्द गर्नुहोस् (Click to collapse)' : '👇 क्लिक गरी भिडियो पाठहरु हेर्नुहोस् (Click to view videos)'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-[10px] bg-purple-100/90 text-purple-900 px-2.5 py-1 rounded-lg font-black border border-purple-200 shadow-2xs">
+                                      {chaptersMap[chName].length} Videos
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 text-purple-600 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-amber-600' : ''}`} />
+                                  </div>
+                                </button>
+
+                                {isExpanded && (
+                                  <div className="p-3 bg-slate-50/80 space-y-1.5 border-t border-purple-100">
+                                    {chaptersMap[chName].map((v, vIdx) => (
+                                      <div key={vIdx} className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white hover:bg-purple-50/70 border border-slate-200/80 transition shadow-2xs">
+                                        <span className="font-semibold text-slate-800 flex items-center gap-2 min-w-0 pr-2">
+                                          <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-[10px] shrink-0 border border-purple-200">
+                                            ▶
+                                          </span>
+                                          <span className="truncate">{v.title}</span>
+                                        </span>
+                                        <span className="text-[10px] text-slate-600 font-bold shrink-0 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                          ⏱️ {v.duration} min
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 {/* Secure purchase assurances */}
                 <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 text-xs text-slate-600 font-semibold text-left">
                   <ShieldCheck className="w-6 h-6 text-emerald-500 shrink-0" />
@@ -3152,6 +3430,40 @@ export default function App() {
                   >
                     <span>QR स्क्यान गरी तत्काल भुक्तानी (eSewa / Bank)</span>
                   </button>
+                </div>
+
+                {/* Direct Activation Code Input Form inside Course Modal */}
+                <div className="mt-6 pt-6 border-t border-slate-100 bg-gradient-to-br from-purple-950 via-slate-900 to-indigo-950 p-4.5 rounded-2xl text-white shadow-xl space-y-3 border border-purple-500/30 text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center font-black text-xs border border-amber-400/30">
+                      🔑
+                    </span>
+                    <h4 className="text-xs font-extrabold text-white">
+                      Already have code? Type & Unlock (सेक्रेट कोड हाल्नुहोस्)
+                    </h4>
+                  </div>
+
+                  <form 
+                    onSubmit={async (e) => {
+                      await handleClaimActivationCode(e);
+                    }} 
+                    className="flex flex-col sm:flex-row gap-2"
+                  >
+                    <input 
+                      type="text"
+                      value={activationCodeInput}
+                      onChange={(e) => setActivationCodeInput(e.target.value)}
+                      placeholder="CLIP-XXXXXX"
+                      className="flex-1 bg-slate-900/90 border border-purple-400/40 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs font-mono font-black uppercase text-white placeholder-slate-400 outline-hidden tracking-widest text-center sm:text-left shadow-inner"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isActivating || !activationCodeInput.trim()}
+                      className="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 shadow-md active:scale-98"
+                    >
+                      {isActivating ? 'Activating...' : 'Unlock Now 🚀'}
+                    </button>
+                  </form>
                 </div>
               </motion.div>
             )}
@@ -3438,6 +3750,94 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* Add Another Course / Link New Activation Code to Existing Student ID */}
+                  <div className="bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 p-4 rounded-2xl text-white shadow-xl space-y-3.5 border border-purple-500/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-lg bg-purple-500/30 border border-purple-400/40 text-amber-300 flex items-center justify-center font-black text-sm">
+                          🔑
+                        </span>
+                        <div>
+                          <h4 className="text-xs font-black tracking-tight text-white">
+                            Add Another Course to Your ID (नयाँ कोर्स थप्नुहोस्)
+                          </h4>
+                          <p className="text-[10px] text-purple-200 font-medium">
+                            आफ्नो यही विद्यार्थी एकाउन्टमा दोस्रो वा थप कोर्स जोड्नुहोस्
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black uppercase text-amber-300 bg-amber-400/20 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                        Multi-Course ID
+                      </span>
+                    </div>
+
+                    {/* Activation Code Form for Adding Course */}
+                    <form onSubmit={handleClaimActivationCode} className="space-y-2.5">
+                      <div className="relative">
+                        <input 
+                          type="text"
+                          required
+                          value={activationCodeInput}
+                          onChange={(e) => setActivationCodeInput(e.target.value)}
+                          placeholder="नयाँ कोर्स सेक्रेट कोड (CLIP-XXXXXX)"
+                          className="w-full bg-slate-950/80 border border-purple-400/40 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs font-mono font-black uppercase text-white placeholder-slate-400 outline-hidden tracking-widest shadow-inner"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isActivating || !activationCodeInput.trim()}
+                        className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-1.5 shadow-lg active:scale-98"
+                      >
+                        {isActivating ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+                            Linking to Account...
+                          </>
+                        ) : (
+                          '➕ Link New Course to My Account 🚀'
+                        )}
+                      </button>
+                    </form>
+
+                    {/* Quick Buy & Add Other Courses Section */}
+                    {courses.filter(c => !activeCourseIds.includes(c.id)).length > 0 && (
+                      <div className="pt-2 border-t border-purple-500/30 space-y-2">
+                        <div className="flex items-center justify-between text-[10px] text-purple-200 font-extrabold">
+                          <span>🛒 Available Courses to Add:</span>
+                          <span className="text-amber-300 text-[9px] font-bold">1-Click WhatsApp Request</span>
+                        </div>
+                        <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                          {courses
+                            .filter(c => !activeCourseIds.includes(c.id))
+                            .map((course) => {
+                              const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student';
+                              const waMessage = `नमस्ते! म पहिले नै ClipZone Student हुँ (Name: ${studentName})। म मेरो यही Student ID मा अर्को कोर्स थप्न चाहन्छु:\n\n📚 Course: ${course.title}\n💰 Price: ${course.price}\n\nकृपया मलाई QR Payment details र Activation Code पठाउनुहोस्।`;
+                              return (
+                                <div 
+                                  key={course.id} 
+                                  className="bg-slate-950/60 hover:bg-slate-950 p-2 rounded-xl border border-purple-400/20 flex items-center justify-between gap-2 transition"
+                                >
+                                  <div className="min-w-0">
+                                    <h5 className="text-[11px] font-black text-white truncate">{course.title}</h5>
+                                    <span className="text-[9px] font-bold text-emerald-400">{course.price}</span>
+                                  </div>
+                                  <a
+                                    href={`https://wa.me/9779763323268?text=${encodeURIComponent(waMessage)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[9px] uppercase px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1 shadow-xs"
+                                  >
+                                    Buy & Add 💬
+                                  </a>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Logout and metadata section */}
                   <div className="flex items-center justify-between border-t border-slate-100 pt-4 text-[11px]">
                     <div className="text-slate-400 font-bold">
@@ -3533,6 +3933,93 @@ export default function App() {
                 >
                   Cancel
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* QUICK ACTIVATION CODE MODAL FOR STUDENTS */}
+      <AnimatePresence>
+        {showCodeInputModal && (
+          <div className="fixed inset-0 z-[2500] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCodeInputModal(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100 text-slate-800"
+            >
+              <button 
+                onClick={() => setShowCodeInputModal(false)}
+                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-14 h-14 bg-purple-100 text-purple-700 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4 shadow-inner border border-purple-200/50">
+                🔑
+              </div>
+
+              <h3 className="text-xl font-extrabold text-slate-900 leading-tight text-center">
+                Add New Course to Student ID
+              </h3>
+              <p className="text-xs text-slate-500 mt-1.5 text-center font-semibold">
+                तपाईंसँग भएको सेक्रेट कोड (CLIP-XXXXXX) यहाँ राखी आफ्नो यही एकाउन्टमा नयाँ कोर्स जोड्नुहोस्।
+              </p>
+
+              <form 
+                onSubmit={async (e) => {
+                  await handleClaimActivationCode(e);
+                  setShowCodeInputModal(false);
+                }} 
+                className="mt-6 space-y-4 text-left"
+              >
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-2">
+                    Secret Activation Code (सेक्रेट कोड) *
+                  </label>
+                  <input 
+                    type="text"
+                    required
+                    autoFocus
+                    value={activationCodeInput}
+                    onChange={(e) => setActivationCodeInput(e.target.value)}
+                    placeholder="CLIP-XXXXXX"
+                    className="w-full bg-slate-50 border border-slate-300 focus:border-purple-600 focus:bg-white rounded-2xl px-4 py-3.5 text-base font-mono font-black uppercase outline-hidden text-center tracking-widest text-slate-900 transition shadow-inner"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isActivating || !activationCodeInput.trim()}
+                  className="w-full bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-800 hover:to-indigo-900 disabled:opacity-50 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-wider transition cursor-pointer shadow-lg shadow-purple-950/20 flex items-center justify-center gap-2"
+                >
+                  {isActivating ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Linking Course to Student ID...
+                    </>
+                  ) : (
+                    '➕ Unlock & Add Course to My Account 🚀'
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-5 pt-4 border-t border-slate-100 text-left">
+                <p className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                  Linked to Student Profile: <span className="text-purple-700 font-extrabold">{currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Account'}</span>
+                </p>
               </div>
             </motion.div>
           </div>
@@ -4106,16 +4593,19 @@ export default function App() {
                     <label className="block text-[10px] font-black uppercase text-slate-400">Course Video Lectures ({formVideos.length})</label>
                     <button
                       type="button"
-                      onClick={() => setFormVideos([...formVideos, { title: '', duration: '10:00', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }])}
+                      onClick={() => {
+                        const lastChapter = formVideos.length > 0 ? formVideos[formVideos.length - 1].chapterTitle : 'Chapter 1: Course Introduction';
+                        setFormVideos([...formVideos, { chapterTitle: lastChapter, title: '', duration: '10:00', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]);
+                      }}
                       className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] font-black px-2.5 py-1 rounded-md transition flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3 h-3" /> Add Lecture
                     </button>
                   </div>
 
-                  <div className="space-y-3 max-h-40 overflow-y-auto pr-1">
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                     {formVideos.map((video, idx) => (
-                      <div key={idx} className="bg-white p-3 rounded-lg border border-slate-100 space-y-2 relative shadow-2xs">
+                      <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2 relative shadow-2xs">
                         <button
                           type="button"
                           onClick={() => setFormVideos(formVideos.filter((_, vidx) => vidx !== idx))}
@@ -4126,17 +4616,32 @@ export default function App() {
                         </button>
 
                         <div>
+                          <label className="block text-[9px] font-black uppercase text-purple-600 mb-0.5">Chapter / Playlist Name (e.g. Chapter 1: Setup & Niche)</label>
+                          <input 
+                            type="text"
+                            placeholder="Chapter 1: Channel Setup & Niche Selection"
+                            value={video.chapterTitle || ''}
+                            onChange={(e) => {
+                              const updated = [...formVideos];
+                              updated[idx].chapterTitle = e.target.value;
+                              setFormVideos(updated);
+                            }}
+                            className="w-full bg-purple-50/50 border border-purple-200 rounded-md px-2 py-1 text-[11px] font-bold text-slate-800 outline-hidden focus:border-purple-600"
+                          />
+                        </div>
+
+                        <div>
                           <input 
                             type="text"
                             required
-                            placeholder="Lecture Title (e.g. Introduction)"
+                            placeholder="Lecture Title (e.g. 1.1 Finding Your Micro-Niche)"
                             value={video.title}
                             onChange={(e) => {
                               const updated = [...formVideos];
                               updated[idx].title = e.target.value;
                               setFormVideos(updated);
                             }}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-[11px] font-semibold text-slate-800 outline-hidden focus:border-purple-500"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-[11px] font-semibold text-slate-800 outline-hidden focus:border-purple-500"
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -4150,19 +4655,19 @@ export default function App() {
                               updated[idx].duration = e.target.value;
                               setFormVideos(updated);
                             }}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-hidden focus:border-purple-500"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-hidden focus:border-purple-500"
                           />
                           <input 
                             type="text"
                             required
-                            placeholder="Drive Preview Link"
+                            placeholder="Drive Preview / YouTube Link"
                             value={video.videoUrl}
                             onChange={(e) => {
                               const updated = [...formVideos];
                               updated[idx].videoUrl = e.target.value;
                               setFormVideos(updated);
                             }}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-hidden focus:border-purple-500"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-hidden focus:border-purple-500"
                           />
                         </div>
                       </div>
@@ -4461,22 +4966,34 @@ export default function App() {
 
               {/* Transparent Click-Prevention Overlays to block YouTube brandings, titles, share links and copy actions */}
               <div 
-                className="absolute top-0 inset-x-0 h-28 md:h-36 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
+                className="absolute top-0 inset-x-0 h-36 md:h-48 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                 title="Protected Player Header" 
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
               />
               <div 
-                className="absolute bottom-0 right-0 w-80 md:w-96 h-28 md:h-32 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
+                className="absolute bottom-0 right-0 w-96 md:w-[500px] h-32 md:h-40 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
                 title="Protected Player Branding Block" 
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              />
+              <div 
+                className="absolute bottom-0 left-0 w-72 h-32 bg-transparent z-45 cursor-default pointer-events-auto select-none" 
+                title="Protected Player Channel Block" 
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onCopy={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onCut={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onDragStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); }}
               />
 
               {/* Watermark in fullscreen */}

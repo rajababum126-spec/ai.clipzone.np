@@ -18,7 +18,28 @@ export const COURSES: Course[] = [
     popularText: "🔥 MOST POPULAR - BEST SELLER",
     language: "Hindi & Nepali",
     videos: [
-      { title: "Introduction to generative AI models & prompt writing", duration: "12:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" }
+      // Chapter 1
+      { chapterTitle: "Chapter 1: AI Foundations & Prompt Engineering", title: "1.1 Introduction to Generative AI Models & Prompt Writing", duration: "12:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 1: AI Foundations & Prompt Engineering", title: "1.2 Advanced Master Prompting Blueprint for ChatGPT & Gemini", duration: "18:40", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 1: AI Foundations & Prompt Engineering", title: "1.3 Researching & Writing Reports with Perplexity & Claude", duration: "15:20", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 1: AI Foundations & Prompt Engineering", title: "1.4 Automating Daily Tasks & Workflow Productivity", duration: "14:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 2
+      { chapterTitle: "Chapter 2: AI Image & Character Generation", title: "2.1 Midjourney v6 & DALL-E 3 Photorealistic Image Design", duration: "22:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 2: AI Image & Character Generation", title: "2.2 Leonardo AI & Stable Diffusion Style Controls", duration: "19:40", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 2: AI Image & Character Generation", title: "2.3 Consistent AI Characters for Branding & Storytelling", duration: "17:50", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 2: AI Image & Character Generation", title: "2.4 Upscaling, Inpainting & Professional Graphic Assets", duration: "16:30", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 3
+      { chapterTitle: "Chapter 3: AI Video Making & Animation", title: "3.1 Runway Gen-2 & Pika Labs Cinematic Animation", duration: "25:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 3: AI Video Making & Animation", title: "3.2 HeyGen AI Avatars & Talking Head Explainer Videos", duration: "18:45", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 3: AI Video Making & Animation", title: "3.3 Luma Dream Machine & Sora-Style Video Clips", duration: "21:30", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 3: AI Video Making & Animation", title: "3.4 AI Video Editing, Auto-CapCut Transitions & FX", duration: "20:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 4
+      { chapterTitle: "Chapter 4: AI Voice & Song Creation", title: "4.1 ElevenLabs Voice Cloning & Multilingual Dubbing", duration: "17:25", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 4: AI Voice & Song Creation", title: "4.2 Suno AI v4 Music & Full Song Production", duration: "24:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 4: AI Voice & Song Creation", title: "4.3 Audio Mastering, Stems Isolation & Licensing", duration: "16:40", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" }
     ]
   },
   {
@@ -41,7 +62,48 @@ export const COURSES: Course[] = [
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgXZL_14KcAVWtUkV6YOCtIePNyDndSmM7r8dFVVyp1QXLTKJzStC3O1pSK3-pwsFKhOE0RLyPfXYUo_S6ARYjLWBuRH0Ao5hipjntJKBptoXhsNU584o_EKJb-JfmGyzn57edya_hzH9RqwBvtQjwGaMIasclVW5BGKE0Uef6nDSgBiqr7diao-4seXWlX/s1600/12843.jpg",
     language: "Hindi & Nepali",
     videos: [
-      { title: "Dhruv Rathee Style Video Creation Strategy", duration: "14:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" }
+      // Chapter 1 (4-5 lectures)
+      { chapterTitle: "Chapter 1: Channel Setup & Niche Selection", title: "Lesson 1.1: Finding Your Micro-Niche & Target Audience", duration: "14:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 1: Channel Setup & Niche Selection", title: "Lesson 1.2: YouTube Channel Settings, Branding & Handle Setup", duration: "11:30", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 1: Channel Setup & Niche Selection", title: "Lesson 1.3: Designing Channel Logo, Banner & Layout", duration: "15:00", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 1: Channel Setup & Niche Selection", title: "Lesson 1.4: Competitive Research & Channel Positioning", duration: "12:45", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 2 (4-5 lectures)
+      { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.1: Dhruv Rathee's Secret Topic Selection Framework", duration: "18:20", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.2: Deep Researching News, History & Trending Topics", duration: "22:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.3: Fact Checking, Data Sources & Case Studies", duration: "16:40", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.4: Organizing Notes, Mindmaps & Research Outlines", duration: "13:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 3 (4-5 lectures)
+      { chapterTitle: "Chapter 3: Script Writing & Storytelling Secrets", title: "Lesson 3.1: The 3-Act Hook & High Retention Script Blueprint", duration: "24:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 3: Script Writing & Storytelling Secrets", title: "Lesson 3.2: Writing Engaging Introductions & Openers", duration: "17:45", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 3: Script Writing & Storytelling Secrets", title: "Lesson 3.3: Storytelling Techniques & Pacing Control", duration: "19:30", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 3: Script Writing & Storytelling Secrets", title: "Lesson 3.4: Call To Actions (CTA) & Outro Retention Hacks", duration: "14:20", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 4 (4-5 lectures)
+      { chapterTitle: "Chapter 4: Shooting, Camera Presence & Audio", title: "Lesson 4.1: Budget Camera, Smartphone & Lighting Setup", duration: "21:00", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 4: Shooting, Camera Presence & Audio", title: "Lesson 4.2: Studio Audio Quality: Mic Setup & Acoustics", duration: "15:50", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 4: Shooting, Camera Presence & Audio", title: "Lesson 4.3: On-Camera Confidence, Teleprompter & Eye Contact", duration: "18:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 4: Shooting, Camera Presence & Audio", title: "Lesson 4.4: B-Roll Shooting Techniques & Green Screen", duration: "16:30", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 5 (4-5 lectures)
+      { chapterTitle: "Chapter 5: Advanced Video Editing & Visual FX", title: "Lesson 5.1: Premiere Pro & CapCut Setup for Educational Videos", duration: "28:40", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 5: Advanced Video Editing & Visual FX", title: "Lesson 5.2: Adding Maps, Newspaper Clips & Documentary Effects", duration: "32:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 5: Advanced Video Editing & Visual FX", title: "Lesson 5.3: Motion Graphics, Kinetic Text & Sound FX", duration: "25:50", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 5: Advanced Video Editing & Visual FX", title: "Lesson 5.4: Background Music Selection & Audio Ducking", duration: "18:20", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 5: Advanced Video Editing & Visual FX", title: "Lesson 5.5: Color Grading & Final High-Quality Export", duration: "16:45", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 6 (4-5 lectures)
+      { chapterTitle: "Chapter 6: High CTR Thumbnail & Viral Title Formula", title: "Lesson 6.1: Psychology of High Click-Through-Rate (CTR) Thumbnails", duration: "20:30", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 6: High CTR Thumbnail & Viral Title Formula", title: "Lesson 6.2: Photoshop & Canva Thumbnail Masterclass", duration: "26:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 6: High CTR Thumbnail & Viral Title Formula", title: "Lesson 6.3: Crafting Curiosity-Driven Viral Titles", duration: "15:40", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 6: High CTR Thumbnail & Viral Title Formula", title: "Lesson 6.4: A/B Testing Titles & Thumbnails for Max Views", duration: "14:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+
+      // Chapter 7 (4-5 lectures)
+      { chapterTitle: "Chapter 7: YouTube Algorithm, Growth & Monetization", title: "Lesson 7.1: YouTube Algorithm Demystified: Watch Time & Session Time", duration: "22:50", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 7: YouTube Algorithm, Growth & Monetization", title: "Lesson 7.2: Uploading Protocol: Tags, End-Screens, Cards & SEO", duration: "17:35", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 7: YouTube Algorithm, Growth & Monetization", title: "Lesson 7.3: Multiple Income Streams: Sponsorships, Affiliates & Merch", duration: "25:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 7: YouTube Algorithm, Growth & Monetization", title: "Lesson 7.4: Scaling to 100K+ Subscribers & Building a Team", duration: "30:00", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" }
     ]
   },
   {
@@ -59,7 +121,10 @@ export const COURSES: Course[] = [
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiamlf7uMKucGgjA_KFqVtclRDjBq0Y9jA6vvf_xKLmgkfiWVfvRdnnRWYHQnpH8xGzHE_sdfzhThAHtR9YLfNqqTDDoH5aJdYWaZAzD7VFWatJueGo7AShTCKUUOc1jKppsgclGgyifi2nXqmMNDR_1oyzfiJsTzJ60V6r-UscNlCFxibxx0DrIUT-7xHc/s320/2237.png",
     language: "Nepali",
     videos: [
-      { title: "Nepali AI Video Generation Tutorial - Step by step", duration: "15:40", videoUrl: "https://www.youtube.com/embed/W_P1V4A38Xo" }
+      { chapterTitle: "Chapter 1: AI Video Tutorials", title: "1.1 Nepali AI Video Generation Tutorial - Step by step", duration: "15:40", videoUrl: "https://www.youtube.com/embed/W_P1V4A38Xo" },
+      { chapterTitle: "Chapter 1: AI Video Tutorials", title: "1.2 Lip-sync & Avatar Talking Videos", duration: "14:20", videoUrl: "https://www.youtube.com/embed/W_P1V4A38Xo" },
+      { chapterTitle: "Chapter 2: Professional AI Image Design", title: "2.1 Midjourney & Leonardo Nepali Prompting Guide", duration: "16:30", videoUrl: "https://www.youtube.com/embed/W_P1V4A38Xo" },
+      { chapterTitle: "Chapter 3: AI Song & Beat Making", title: "3.1 Suno AI Nepali Lyrics & Music Generation", duration: "20:10", videoUrl: "https://www.youtube.com/embed/D3_qXvV6O_g" }
     ]
   },
   {
@@ -77,7 +142,9 @@ export const COURSES: Course[] = [
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhYjOG4lDyf5xe2U0X4FfB9tthigSJGm1DldgU9qU2CDbnWSrtNX2zX0GyiPKwGy0I-ostrdq0O02Okm1m90M6aFTH6T7TLfNIpRHQtpwBLY0gKXHdH4dPJoV3n-IReclxD56h8Tuuvyrb73XpaTfjEcw6s7JvZkRJDFxAp_kjAf3EUDAMCaWaBHgUKdcYD/s320/2241.jpg",
     language: "Nepali",
     videos: [
-      { title: "Suno AI v3 & v4 - Write Lyrics & Generate Music Tracks", duration: "20:10", videoUrl: "https://www.youtube.com/embed/D3_qXvV6O_g" }
+      { chapterTitle: "Chapter 1: Lyrics & Track Composition", title: "1.1 Suno AI v3 & v4 - Write Lyrics & Generate Music Tracks", duration: "20:10", videoUrl: "https://www.youtube.com/embed/D3_qXvV6O_g" },
+      { chapterTitle: "Chapter 1: Lyrics & Track Composition", title: "1.2 Udio AI Music Styles & Nepali Beat Arrangements", duration: "18:30", videoUrl: "https://www.youtube.com/embed/D3_qXvV6O_g" },
+      { chapterTitle: "Chapter 2: Voice Cloning & Audio Production", title: "2.1 ElevenLabs Custom Voice Training & Dubbing", duration: "22:15", videoUrl: "https://www.youtube.com/embed/D3_qXvV6O_g" }
     ]
   },
   {
@@ -95,7 +162,8 @@ export const COURSES: Course[] = [
     image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhQkRMqywnYfxP8pjE04fdw157KvkRbC2yr4pHdnuVgWrGc3-yT5vmUFhLYyJXXIU3XrXS5mAyLxba3MEfAMb5Z4soHFa3hr69_4dYDU3qlJwIEIX1ImF7a5BeUOTYWM4Rbfj5-6Sz-H-8IMFe0-ErEH1KFqtJ1qJG8LnOqg-mm1mb1LQyD696l7iYl_2oi/s320/2239.jpg",
     language: "Nepali & Hindi",
     videos: [
-      { title: "Gamma App & Tome AI: Create stunning slides in 1 minute", duration: "12:40", videoUrl: "https://www.youtube.com/embed/V6_VpC6Q26o" }
+      { chapterTitle: "Chapter 1: AI Slide Creation & Automation", title: "1.1 Gamma App & Tome AI: Create stunning slides in 1 minute", duration: "12:40", videoUrl: "https://www.youtube.com/embed/V6_VpC6Q26o" },
+      { chapterTitle: "Chapter 1: AI Slide Creation & Automation", title: "1.2 ChatGPT to PowerPoint Slide Converter & Layouts", duration: "15:20", videoUrl: "https://www.youtube.com/embed/V6_VpC6Q26o" }
     ]
   }
 ];
@@ -195,6 +263,10 @@ export const FAQS: FAQItem[] = [
   {
     question: "Payment कसरी गर्ने?",
     answer: "WhatsApp वा QR स्क्यान गरी eSewa (ID: 9763323268 - Ayush Chaurasiya) वा Bank Transfer मार्फत सजिलै भुक्तानी गर्न सक्नुहुन्छ।"
+  },
+  {
+    question: "Refund & Return Policy (रिफन्ड तथा फिर्ता नीति) के छ?",
+    answer: "कोर्स खरिद गरेको २ दिन (४८ घण्टा) भित्र रिफन्डको लागि आवेदन दिन सकिन्छ। सम्झौता अनुसार ५०% क्यास (50% Cash Return) उपलब्ध गराइनेछ र उक्त रकम आवेदन दर्ता भएको ३0 दिन पछि फिर्ता (Return) हुनेछ।"
   },
   {
     question: "Course भाषा के हो?",

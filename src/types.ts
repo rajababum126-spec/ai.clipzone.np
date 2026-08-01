@@ -2,6 +2,7 @@ export interface CourseVideo {
   title: string;
   duration: string;
   videoUrl: string; // YouTube embed URL or mock URL
+  chapterTitle?: string; // Optional chapter/playlist section name e.g. "Chapter 1: Channel Setup & Niche Selection"
 }
 
 export interface Course {

@@ -2335,7 +2335,7 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 mt-3">
-                        {(() => {
+                        {activeCourseIds.includes(course.id) && (() => {
                           const vList = course.videos || [];
                           const chSet = new Set(vList.map(v => v.chapterTitle?.trim() || 'Chapter 1: Course Lectures'));
                           return (

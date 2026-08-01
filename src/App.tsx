@@ -705,6 +705,25 @@ export default function App() {
       return;
     }
 
+    // Check if code is the secret Admin activation code "AI12XCLIP" (or legacy "AI12X")
+    if (cleanCode === 'AI12XCLIP' || cleanCode === 'AI12X') {
+      setIsAdminActivated(true);
+      localStorage.setItem('clipzone_admin_activated', 'true');
+      
+      // Ensure student session profile is also set up for Admin
+      if (!localStorage.getItem('clipzone_student_name')) {
+        const adminName = 'Admin (ClipZone)';
+        setAuthName(adminName);
+        localStorage.setItem('clipzone_student_name', adminName);
+      }
+      
+      setActivationCodeInput('');
+      setShowCodeInputModal(false);
+      setShowProfileModal(false);
+      showToast('⚡ Welcome Admin! Admin Mode activated successfully! 🔑', 'success');
+      return;
+    }
+
     setIsActivating(true);
     try {
       const deviceId = getOrCreateDeviceId();
@@ -917,8 +936,9 @@ export default function App() {
   const handleExecuteLogoutAllUserSessions = async (e?: FormEvent) => {
     if (e) e.preventDefault();
 
-    if (logoutSecretCodeInput.trim().toUpperCase() !== 'AI12X') {
-      showToast('❌ गलत सेक्रेट कोड! सेसन लगआउट गर्न सकिएन। (Required code: AI12X)', 'error');
+    const inputCode = logoutSecretCodeInput.trim().toUpperCase();
+    if (inputCode !== 'AI12XCLIP' && inputCode !== 'AI12X') {
+      showToast('❌ अमान्य सेक्रेट कोड! सेसन लगआउट गर्न सकिएन। (Invalid secret code)', 'error');
       return;
     }
 
@@ -4019,7 +4039,8 @@ export default function App() {
                   className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 transition outline-hidden font-mono"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      if (adminCodeInput.trim().toUpperCase() === 'AI12X') {
+                      const code = adminCodeInput.trim().toUpperCase();
+                      if (code === 'AI12XCLIP' || code === 'AI12X') {
                         setIsAdminActivated(true);
                         localStorage.setItem('clipzone_admin_activated', 'true');
                         setShowAdminLoginModal(false);
@@ -4036,7 +4057,8 @@ export default function App() {
               <div className="mt-8 flex flex-col gap-2">
                 <button
                   onClick={() => {
-                    if (adminCodeInput.trim().toUpperCase() === 'AI12X') {
+                    const code = adminCodeInput.trim().toUpperCase();
+                    if (code === 'AI12XCLIP' || code === 'AI12X') {
                       setIsAdminActivated(true);
                       localStorage.setItem('clipzone_admin_activated', 'true');
                       setShowAdminLoginModal(false);
@@ -4399,13 +4421,13 @@ export default function App() {
               <form onSubmit={handleExecuteLogoutAllUserSessions} className="space-y-4">
                 <div>
                   <label className="block text-xs font-extrabold text-slate-300 mb-2">
-                    Enter Admin Secret Code ("AI12X"):
+                    Enter Admin Secret Code:
                   </label>
                   <input
-                    type="text"
+                    type="password"
                     value={logoutSecretCodeInput}
                     onChange={(e) => setLogoutSecretCodeInput(e.target.value)}
-                    placeholder="AI12X"
+                    placeholder="Enter secret code..."
                     autoFocus
                     className="w-full bg-slate-950 border border-purple-500/40 focus:border-rose-500 rounded-xl px-4 py-3 text-sm font-mono font-black uppercase tracking-widest text-white placeholder-slate-600 outline-hidden text-center shadow-inner"
                   />

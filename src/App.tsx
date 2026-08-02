@@ -144,8 +144,22 @@ export default function App() {
   const [logoutSecretCodeInput, setLogoutSecretCodeInput] = useState('');
 
   // Student Authentication & Course Activation states
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(() => {
+    const localName = localStorage.getItem('clipzone_student_name');
+    if (localName) {
+      return {
+        uid: localStorage.getItem('clipzone_student_uid') || 'local_student',
+        displayName: localName,
+        isAnonymous: true,
+        email: null
+      } as any;
+    }
+    return null;
+  });
+  const [authLoading, setAuthLoading] = useState<boolean>(() => {
+    // If student profile already exists in local storage, don't block UI with loading
+    return !localStorage.getItem('clipzone_student_name');
+  });
   const [userActivationKeys, setUserActivationKeys] = useState<any[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
@@ -446,7 +460,16 @@ export default function App() {
         setAuthLoading(false);
       }
     });
-    return () => unsubscribe();
+
+    // Safety fallback: Ensure authLoading is never stuck in infinite loading
+    const safetyTimeout = setTimeout(() => {
+      setAuthLoading(false);
+    }, 800);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   // Periodic device session check to handle real-time single device enforcement
@@ -1275,58 +1298,7 @@ export default function App() {
     }
   };
 
-  // Web App / PWA Install States
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallModal, setShowInstallModal] = useState(false);
-  const [isAppInstalled, setIsAppInstalled] = useState(false);
-  const [activeInstallTab, setActiveInstallTab] = useState<'android' | 'ios' | 'desktop'>('android');
 
-  // Detect PWA install prompt & standalone status
-  useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
-      setIsAppInstalled(true);
-    }
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    const handleAppInstalled = () => {
-      setIsAppInstalled(true);
-      setDeferredPrompt(null);
-      showToast('AI Clipzone Nepal Web App सफलतापूर्वक इन्स्टल गरियो! 📱🎉', 'success');
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
-  const handleInstallAppClick = () => {
-    if (isAppInstalled) {
-      showToast('AI Clipzone App पहिले नै Home Screen मा इन्स्टल भइसकेको छ! 📱✨', 'info');
-      return;
-    }
-
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
-        if (choiceResult.outcome === 'accepted') {
-          showToast('एप सफलतापूर्वक Home Screen मा इन्स्टल भयो! 🚀📱', 'success');
-          setIsAppInstalled(true);
-          setShowInstallModal(false);
-        }
-        setDeferredPrompt(null);
-      });
-    } else {
-      setShowInstallModal(true);
-    }
-  };
 
   // Auth Form Fields
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -2035,7 +2007,7 @@ export default function App() {
               : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
           }`}
         >
-          🏠 Home Page
+          🏠 Home
         </button>
         <button
           onClick={() => {
@@ -2049,7 +2021,7 @@ export default function App() {
               : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
           }`}
         >
-          🎓 Course Page
+          🎓 Classroom
           {activeCourseIds.length > 0 && (
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
           )}
@@ -3536,7 +3508,7 @@ export default function App() {
                 👤 Profile Page
               </span>
 
-              {authLoading ? (
+              {authLoading && !currentUser && !localStorage.getItem('clipzone_student_name') ? (
                 <div className="py-12 text-center text-xs font-bold text-slate-400 flex flex-col items-center justify-center gap-3">
                   <span className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
                   Securing user session...

@@ -1828,204 +1828,207 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Top Floating Banner with elegant gradient */}
-      <div className="sticky top-0 z-[100] w-full bg-linear-to-r from-purple-800 via-indigo-900 to-purple-900 text-white shadow-md border-b border-purple-700/30 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div 
-            onClick={() => {
-              if (isAdminActivated) {
-                setShowAdminMenu(!showAdminMenu);
-              } else {
-                setCurrentView('home');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }
-            }}
-            className="flex items-center gap-3 cursor-pointer select-none relative group"
-            title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
-          >
-            <img 
-              src={LOGO_DATA_URL} 
-              alt="AI Clipzone Logo"
-              className="w-10 h-10 object-contain rounded-full border border-amber-400/50 shadow-sm bg-slate-900/40 p-0.5 group-hover:scale-105 transition-transform"
-            />
-            <h1 className="text-lg md:text-xl font-extrabold tracking-tight flex items-center gap-1">
-              AI Clipzone <span className="text-amber-400">Nepal</span> 🇳🇵
-              {isAdminActivated && (
-                <span className="bg-amber-400 text-slate-950 text-[10px] px-1.5 py-0.5 rounded-md font-black shadow-xs ml-1 uppercase">Admin</span>
-              )}
-            </h1>
-
-            {isAdminActivated && showAdminMenu && (
-              <div className="absolute top-12 left-0 z-[1000] w-52 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-1.5 font-bold text-xs text-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowAdminMenu(false);
-                    handleCreateCourseClick();
-                  }}
-                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                  ➕ Add New Course
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowAdminMenu(false);
-                    setShowAdminDashboard(true);
-                  }}
-                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                  🗝️ Code Generator
-                </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsAdminActivated(false);
-                    localStorage.removeItem('clipzone_admin_activated');
-                    setShowAdminMenu(false);
-                    showToast('Logged out of Admin mode', 'info');
-                  }}
-                  className="w-full text-left px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-950/30 hover:text-rose-300 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800/80 mt-1"
-                >
-                  🚪 Exit Admin Mode
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="hidden sm:flex items-center gap-1.5 bg-purple-950/50 p-1 rounded-full border border-purple-500/30">
-            <button
+      {/* Top Header & Navigation Container */}
+      <div className="sticky top-0 z-[100] w-full shadow-md bg-slate-900">
+        {/* Top Floating Banner with elegant gradient */}
+        <div className="w-full bg-gradient-to-r from-purple-800 via-indigo-900 to-purple-900 text-white">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div 
               onClick={() => {
-                setCurrentView('home');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                showToast('Welcome Home! 🏠', 'info');
+                if (isAdminActivated) {
+                  setShowAdminMenu(!showAdminMenu);
+                } else {
+                  setCurrentView('home');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
               }}
-              className={`px-3.5 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                currentView === 'home'
-                  ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
-                  : 'text-purple-100 hover:text-white hover:bg-purple-900/40'
-              }`}
+              className="flex items-center gap-3 cursor-pointer select-none relative group"
+              title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
             >
-              🏠 Home Page
-            </button>
-            <button
-              onClick={() => {
-                setCurrentView('classroom');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                showToast('Welcome to Your Classroom! 🎓', 'info');
-              }}
-              className={`px-3.5 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
-                currentView === 'classroom'
-                  ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
-                  : 'text-purple-100 hover:text-white hover:bg-purple-900/40'
-              }`}
-            >
-              🎓 Course Page
-              {activeCourseIds.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping border border-purple-950" />
+              <img 
+                src={LOGO_DATA_URL} 
+                alt="AI Clipzone Logo"
+                className="w-10 h-10 object-contain rounded-full border border-amber-400/50 shadow-sm bg-slate-900/40 p-0.5 group-hover:scale-105 transition-transform"
+              />
+              <h1 className="text-lg md:text-xl font-extrabold tracking-tight flex items-center gap-1">
+                AI Clipzone <span className="text-amber-400">Nepal</span> 🇳🇵
+                {isAdminActivated && (
+                  <span className="bg-amber-400 text-slate-950 text-[10px] px-1.5 py-0.5 rounded-md font-black shadow-xs ml-1 uppercase">Admin</span>
+                )}
+              </h1>
+
+              {isAdminActivated && showAdminMenu && (
+                <div className="absolute top-12 left-0 z-[1000] w-52 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-1.5 font-bold text-xs text-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAdminMenu(false);
+                      handleCreateCourseClick();
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    ➕ Add New Course
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAdminMenu(false);
+                      setShowAdminDashboard(true);
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    🗝️ Code Generator
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAdminActivated(false);
+                      localStorage.removeItem('clipzone_admin_activated');
+                      setShowAdminMenu(false);
+                      showToast('Logged out of Admin mode', 'info');
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl text-rose-400 hover:bg-rose-950/30 hover:text-rose-300 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800/80 mt-1"
+                  >
+                    🚪 Exit Admin Mode
+                  </button>
+                </div>
               )}
-            </button>
-          </div>
-          <div className="flex items-center gap-2.5">
-
-
-            {/* Dropdown Menu Button */}
-            <div className="relative">
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 bg-purple-950/50 p-1 rounded-full border border-purple-500/30">
               <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-10 h-10 rounded-full bg-purple-950/60 border border-purple-500/30 text-white hover:bg-purple-900 transition flex items-center justify-center cursor-pointer select-none font-bold text-xs"
-                title="Menu"
+                onClick={() => {
+                  setCurrentView('home');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  showToast('Welcome Home! 🏠', 'info');
+                }}
+                className={`px-3.5 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
+                  currentView === 'home'
+                    ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
+                    : 'text-purple-100 hover:text-white hover:bg-purple-900/40'
+                }`}
               >
-                {currentUser ? (
-                  <span className="uppercase text-[11px] text-purple-300 font-black">
-                    {(currentUser.displayName || currentUser.email || 'ST').substring(0, 2)}
-                  </span>
-                ) : (
-                  <Menu className="w-5 h-5" />
+                🏠 Home Page
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentView('classroom');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  showToast('Welcome to Your Classroom! 🎓', 'info');
+                }}
+                className={`px-3.5 py-1.5 rounded-full font-black text-xs transition-all duration-150 cursor-pointer flex items-center gap-1.5 relative ${
+                  currentView === 'classroom'
+                    ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
+                    : 'text-purple-100 hover:text-white hover:bg-purple-900/40'
+                }`}
+              >
+                🎓 Course Page
+                {activeCourseIds.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping border border-purple-950" />
                 )}
               </button>
+            </div>
+            <div className="flex items-center gap-2.5">
 
-              <AnimatePresence>
-                {showUserMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-slate-100 flex flex-col gap-1"
-                  >
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        setCurrentView('home');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        showToast('Welcome Home! 🏠', 'info');
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
-                    >
-                      🏠 Home Page
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        setCurrentView('classroom');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        showToast('Your Course Classroom! 🎓', 'info');
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
-                    >
-                      🎓 Course Page
-                    </button>
 
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        setShowProfileModal(true);
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer font-bold text-amber-400"
+              {/* Dropdown Menu Button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="w-10 h-10 rounded-full bg-purple-950/60 border border-purple-500/30 text-white hover:bg-purple-900 transition flex items-center justify-center cursor-pointer select-none font-bold text-xs"
+                  title="Menu"
+                >
+                  {currentUser ? (
+                    <span className="uppercase text-[11px] text-purple-300 font-black">
+                      {(currentUser.displayName || currentUser.email || 'ST').substring(0, 2)}
+                    </span>
+                  ) : (
+                    <Menu className="w-5 h-5" />
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {showUserMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                      className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-2 z-[500] font-extrabold text-xs text-slate-100 flex flex-col gap-1"
                     >
-                      👤 Profile Page
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setCurrentView('home');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          showToast('Welcome Home! 🏠', 'info');
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
+                      >
+                        🏠 Home Page
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setCurrentView('classroom');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          showToast('Your Course Classroom! 🎓', 'info');
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
+                      >
+                        🎓 Course Page
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setShowProfileModal(true);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer font-bold text-amber-400"
+                      >
+                        👤 Profile Page
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Mobile Tab Switcher (Visible only on mobile/small screens) */}
-      <div className="sm:hidden w-full bg-slate-900 border-b border-slate-800 py-2 px-4 sticky top-[65px] z-40 shadow-sm flex gap-2">
-        <button
-          onClick={() => {
-            setCurrentView('home');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            showToast('Home Page! 🏠', 'info');
-          }}
-          className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 ${
-            currentView === 'home'
-              ? 'bg-amber-400 text-slate-950 shadow-sm'
-              : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
-          }`}
-        >
-          🏠 Home
-        </button>
-        <button
-          onClick={() => {
-            setCurrentView('classroom');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            showToast('My Classroom! 🎓', 'info');
-          }}
-          className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
-            currentView === 'classroom'
-              ? 'bg-amber-400 text-slate-950 shadow-sm'
-              : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
-          }`}
-        >
-          🎓 Classroom
-          {activeCourseIds.length > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-          )}
-        </button>
+        {/* Mobile Tab Switcher (Seamlessly attached without gap) */}
+        <div className="sm:hidden w-full bg-slate-900 border-b border-slate-800 py-2 px-4 flex gap-2">
+          <button
+            onClick={() => {
+              setCurrentView('home');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              showToast('Home Page! 🏠', 'info');
+            }}
+            className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 ${
+              currentView === 'home'
+                ? 'bg-amber-400 text-slate-950 shadow-sm'
+                : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
+            }`}
+          >
+            🏠 Home
+          </button>
+          <button
+            onClick={() => {
+              setCurrentView('classroom');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              showToast('My Classroom! 🎓', 'info');
+            }}
+            className={`flex-1 py-2 rounded-xl text-center font-black text-xs transition flex items-center justify-center gap-1.5 relative ${
+              currentView === 'classroom'
+                ? 'bg-amber-400 text-slate-950 shadow-sm'
+                : 'text-slate-400 bg-slate-950 hover:bg-slate-800'
+            }`}
+          >
+            🎓 Classroom
+            {activeCourseIds.length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Main Container for Course List */}

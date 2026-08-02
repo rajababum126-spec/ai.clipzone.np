@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent, MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { 
@@ -194,6 +194,8 @@ export default function App() {
       console.warn('Active courses cleanup err:', e);
     }
   }, [courses]);
+
+
 
   // Course Add/Edit modal state
   const [showCourseFormModal, setShowCourseFormModal] = useState(false);
@@ -2007,19 +2009,9 @@ export default function App() {
                         setShowUserMenu(false);
                         setShowProfileModal(true);
                       }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer"
-                    >
-                      👤 Profile Page
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        setShowProfileModal(true);
-                      }}
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer font-bold text-amber-400"
                     >
-                      🔑 Login
+                      👤 Profile Page
                     </button>
                   </motion.div>
                 )}
@@ -2070,15 +2062,16 @@ export default function App() {
         {/* Course Catalog Title & Grid Section */}
         <section id="courses-section" className="pt-2 scroll-mt-24">
           {currentView === 'home' && (
-            <div className="text-center mb-12">
+            <div className="text-center mb-10">
               <h3 className="text-2xl md:text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-2">
                 <BookOpen className="w-7 h-7 text-purple-600" />
                 Our Premium AI Courses
               </h3>
               <div className="w-24 h-1.5 bg-amber-500 mx-auto rounded-full mt-3"></div>
-              <p className="text-slate-500 mt-3 text-sm md:text-base">
+              <p className="text-slate-500 mt-3 text-sm md:text-base max-w-xl mx-auto font-medium">
                 तपाईंको आवश्यकता अनुसार उत्कृष्ट कोर्ष छनोट गर्नुहोस् र आजैबाट सिक्न सुरु गर्नुहोस्!
               </p>
+
 
             </div>
           )}
@@ -2172,8 +2165,8 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Beautiful Vertical Playlist Layout (Matches classic clean uploaded playlist visual) */}
-                        <div className="space-y-3 mt-8">
+                        {/* Beautiful Vertical Playlist Layout */}
+                        <div className="space-y-3 mt-6">
                           {activePlaylist.map((video, idx) => {
                             const ytId = getYouTubeIdGlobal(video.videoUrl);
 
@@ -2198,12 +2191,12 @@ export default function App() {
                                 }}
                                 className="group bg-white hover:bg-slate-50/70 border border-slate-100 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-4 text-left"
                               >
-                                {/* Left: Elegant pastel pink play icon box matching the screenshot */}
-                                <div className="w-11 h-11 sm:w-12 sm:h-12 bg-[#FDF2F2] border border-[#FDE8E8]/40 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                {/* Left: Elegant play icon box */}
+                                <div className="w-11 h-11 sm:w-12 sm:h-12 border border-[#FDE8E8]/40 bg-[#FDF2F2] rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                                   <Play className="w-4 h-4 text-[#E02424] fill-[#E02424] ml-0.5" />
                                 </div>
 
-                                {/* Right: Text Info */}
+                                {/* Center: Text Info */}
                                 <div className="flex-1 min-w-0">
                                   <h5 className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-purple-700 transition-colors leading-snug font-sans">
                                     {video.title}
@@ -2272,9 +2265,9 @@ export default function App() {
                 </button>
               </div>
             </div>
-          )) : (
-            /* ==================== HOME PAGE VIEW ==================== */
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
+          )
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
               {courses.map((course, index) => (
                 <motion.div
                   key={course.id}
@@ -3530,7 +3523,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white max-w-md w-full rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 border border-slate-100 text-slate-800"
+              className="bg-white max-w-xl w-full rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10 border border-slate-200 text-slate-900 max-h-[90vh] overflow-y-auto font-sans shadow-purple-950/20"
             >
               <button 
                 onClick={() => setShowProfileModal(false)}
@@ -3540,7 +3533,7 @@ export default function App() {
               </button>
 
               <span className="inline-block bg-purple-100 text-purple-800 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3">
-                👤 Student Portal
+                👤 Profile Page
               </span>
 
               {authLoading ? (
@@ -3812,7 +3805,7 @@ export default function App() {
                 onClick={() => setShowProfileModal(false)}
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 px-4 rounded-xl text-sm transition mt-6 cursor-pointer"
               >
-                Close Portal
+                Close Profile
               </button>
             </motion.div>
           </div>

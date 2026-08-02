@@ -61,6 +61,18 @@
   font-family: var(--font-heading);
 }
 
+/* Mobile view clear visibility & slight zoom-out styling (thorai zoom out for mobile) */
+@media (max-width: 640px) {
+  html {
+    font-size: 93.5%;
+  }
+
+  body {
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
+  }
+}
+
 
 
 

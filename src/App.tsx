@@ -567,14 +567,6 @@ export default function App() {
   // Fetch all keys for Admin panel
   const fetchAdminKeys = async () => {
     setIsAdminLoadingKeys(true);
-    let isFinished = false;
-
-    // Safety timeout after 2.5 seconds to prevent hanging
-    const timeoutId = setTimeout(() => {
-      if (!isFinished) {
-        setIsAdminLoadingKeys(false);
-      }
-    }, 2500);
 
     try {
       const querySnapshot = await getDocs(collection(db, 'activation_keys'));
@@ -599,8 +591,6 @@ export default function App() {
         showToast('Loaded key database from local storage.', 'info');
       }
     } finally {
-      isFinished = true;
-      clearTimeout(timeoutId);
       setIsAdminLoadingKeys(false);
     }
   };
@@ -4290,14 +4280,15 @@ export default function App() {
                               key.code.toLowerCase().includes(query) ||
                               (key.courseTitle || '').toLowerCase().includes(query) ||
                               (key.studentName || '').toLowerCase().includes(query) ||
-                              (key.claimedByEmail || '').toLowerCase().includes(query)
+                              (key.claimedByEmail || '').toLowerCase().includes(query) ||
+                              (key.claimedByUid || '').toLowerCase().includes(query)
                             );
                           })
                           .map((key) => (
-                            <div key={key.id} className="p-3 hover:bg-slate-50/50 transition flex items-center justify-between gap-4 text-xs">
-                              <div className="space-y-1 min-w-0">
+                            <div key={key.id} className="p-3.5 hover:bg-slate-50/70 transition flex items-start justify-between gap-4 text-xs">
+                              <div className="space-y-1.5 min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-mono font-black text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 select-all">
+                                  <span className="font-mono font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 select-all">
                                     {key.code}
                                   </span>
                                   <button
@@ -4305,41 +4296,52 @@ export default function App() {
                                       navigator.clipboard.writeText(key.code);
                                       showToast(`Copied code: ${key.code}! 📋`, 'success');
                                     }}
-                                    className="text-slate-400 hover:text-slate-600 transition text-[10px] font-bold"
+                                    className="text-purple-600 hover:text-purple-800 transition text-[10px] font-bold cursor-pointer"
                                     title="Copy Key"
                                   >
-                                    Copy
+                                    📋 Copy
                                   </button>
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black uppercase ${
+                                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${
                                     key.status === 'unused' 
                                       ? 'bg-amber-100 text-amber-800 border border-amber-200' 
                                       : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                                   }`}>
                                     {key.status}
                                   </span>
-                                  <span className="text-[9px] text-slate-400 bg-slate-50 px-1 py-0.5 rounded border border-slate-100">
-                                    {key.duration === '1month' ? '30d' : '365d'}
+                                  <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-bold">
+                                    {key.duration === '1month' ? '30 Days' : '1 Year'}
                                   </span>
                                 </div>
-                                <p className="text-[11px] font-extrabold text-slate-700 truncate max-w-[280px]">
-                                  {key.courseTitle || 'All Courses'}
+
+                                <p className="text-[11px] font-black text-slate-800 truncate">
+                                  📚 {key.courseTitle || 'All Courses'}
                                 </p>
-                                <p className="text-[10px] font-bold text-purple-700 truncate">
-                                  👤 Student: <span className="font-extrabold text-slate-900">{key.studentName || key.claimedByEmail || 'Not Assigned'}</span>
-                                </p>
-                                {key.status === 'used' && (
-                                  <div className="text-[9px] font-medium text-slate-400 space-y-0.5">
-                                    <p>Claimed At: <span className="font-bold">{new Date(key.claimedAt || 0).toLocaleDateString()}</span></p>
-                                    <p className="flex items-center gap-1 font-semibold">
-                                      Session: {key.activeDeviceId ? (
-                                        <span className="text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded font-black text-[8px] uppercase">🟢 Active Device</span>
-                                      ) : (
-                                        <span className="text-slate-500 bg-slate-100 px-1 py-0.2 rounded font-black text-[8px] uppercase">⚪ Logged Out</span>
-                                      )}
+
+                                <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 space-y-1 text-[10px] font-bold text-slate-600">
+                                  <p className="flex items-center gap-1.5 text-purple-900 font-extrabold">
+                                    👤 Student Name: <span className="text-slate-900">{key.studentName || key.claimedByEmail || 'Not Assigned'}</span>
+                                  </p>
+                                  {key.claimedByEmail && key.claimedByEmail !== key.studentName && (
+                                    <p className="text-slate-500 text-[9px]">
+                                      📧 User ID/Email: <span className="font-mono text-slate-700">{key.claimedByEmail}</span>
                                     </p>
+                                  )}
+                                  <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1 border-t border-slate-100/80 flex-wrap gap-2">
+                                    <span>Created: {key.createdAt ? new Date(key.createdAt).toLocaleDateString() : 'N/A'}</span>
+                                    <span>
+                                      Claimed: {key.status === 'used' && key.claimedAt ? new Date(key.claimedAt).toLocaleDateString() : 'Unclaimed'}
+                                    </span>
+                                    <span>
+                                      Session: {key.activeDeviceId ? (
+                                        <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-black text-[8px] uppercase">🟢 Active Device</span>
+                                      ) : (
+                                        <span className="text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded font-black text-[8px] uppercase">⚪ Logged Out</span>
+                                      )}
+                                    </span>
                                   </div>
-                                )}
+                                </div>
                               </div>
+
                               <button
                                 onClick={() => handleDeleteActivationKey(key.code)}
                                 className="text-slate-300 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition shrink-0 cursor-pointer"

@@ -566,12 +566,13 @@ export default function App() {
 
   // Fetch all keys for Admin panel
   const fetchAdminKeys = async () => {
-    // First, load cached keys immediately so the user doesn't see a blank spinner if cache exists
+    let cachedKeys: any[] = [];
     const cached = localStorage.getItem('clipzone_admin_keys_cache');
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          cachedKeys = parsed;
           setAllActivationKeys(parsed);
         }
       } catch (e) {}
@@ -582,21 +583,35 @@ export default function App() {
     try {
       const querySnapshot = await getDocs(collection(db, 'activation_keys'));
 
-      const keys: any[] = [];
+      const firestoreKeys: any[] = [];
       querySnapshot.forEach((doc: any) => {
-        keys.push({ id: doc.id, ...doc.data() });
+        firestoreKeys.push({ id: doc.id, ...doc.data() });
       });
-      keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      setAllActivationKeys(keys);
-      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(keys));
+
+      // Merge Firestore keys with cached keys so locally created keys are auto-restored
+      const firestoreCodeSet = new Set(firestoreKeys.map(k => k.code || k.id));
+      const mergedKeys = [...firestoreKeys];
+
+      for (const cachedKey of cachedKeys) {
+        const keyId = cachedKey.code || cachedKey.id;
+        if (keyId && !firestoreCodeSet.has(keyId)) {
+          mergedKeys.push(cachedKey);
+          // Sync missing local key to Cloud Firestore
+          try {
+            await setDoc(doc(db, 'activation_keys', keyId), cachedKey);
+          } catch (syncErr) {
+            console.warn('Auto-sync cached key error:', syncErr);
+          }
+        }
+      }
+
+      mergedKeys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setAllActivationKeys(mergedKeys);
+      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(mergedKeys));
     } catch (err: any) {
       console.error('Failed loading keys for admin:', err);
-      // Fallback to cache if available
-      const fallbackCached = localStorage.getItem('clipzone_admin_keys_cache');
-      if (fallbackCached) {
-        try {
-          setAllActivationKeys(JSON.parse(fallbackCached));
-        } catch (e) {}
+      if (cachedKeys.length > 0) {
+        setAllActivationKeys(cachedKeys);
       }
       if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
         showToast('Database connection restricted. Showing cached key database.', 'info');

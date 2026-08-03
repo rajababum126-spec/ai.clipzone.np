@@ -641,9 +641,27 @@ export default function App() {
   };
 
   const handleStudentLogout = async () => {
-    try {
-      const activeCodesStr = localStorage.getItem('clipzone_active_codes');
-      if (activeCodesStr) {
+    // Save active codes string before clearing storage
+    const activeCodesStr = localStorage.getItem('clipzone_active_codes');
+
+    // Immediately clear local storage keys
+    localStorage.removeItem('clipzone_student_name');
+    localStorage.removeItem('clipzone_student_uid');
+    localStorage.removeItem('clipzone_local_activated_courses');
+    localStorage.removeItem('clipzone_active_codes');
+    localStorage.removeItem('clipzone_activated_keys_info');
+
+    // Reset component states so UI instantly updates and closes modals
+    setCurrentUser(null);
+    setUserActivationKeys([]);
+    setActiveCourseIds([]);
+    setAuthName('');
+    setShowProfileModal(false);
+    setShowUserMenu(false);
+
+    // Release device claims in Firestore for active codes
+    if (activeCodesStr) {
+      try {
         const activeCodes: string[] = JSON.parse(activeCodesStr);
         for (const code of activeCodes) {
           try {
@@ -655,23 +673,18 @@ export default function App() {
             console.error(`Failed to release code ${code} during logout:`, err);
           }
         }
+      } catch (err) {
+        console.warn('Error releasing activation codes during logout:', err);
       }
-    } catch (err) {
-      console.warn('Error releasing activation codes during logout:', err);
     }
 
+    // Sign out from Firebase auth
     try {
       await signOut(auth);
     } catch (err) {
       console.warn('Sign out from Firebase failed, continuing local logout:', err);
     }
-    localStorage.removeItem('clipzone_student_name');
-    localStorage.removeItem('clipzone_student_uid');
-    localStorage.removeItem('clipzone_local_activated_courses');
-    localStorage.removeItem('clipzone_active_codes');
-    setCurrentUser(null);
-    setUserActivationKeys([]);
-    setActiveCourseIds([]);
+
     showToast('Student Portal र सबै कोर्स लगआउट गरियो! (Logged out of all courses successfully!)', 'info');
   };
 
@@ -1987,6 +2000,15 @@ export default function App() {
                       >
                         👤 Profile Page
                       </button>
+
+                      {currentUser && (
+                        <button
+                          onClick={handleStudentLogout}
+                          className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-rose-950/60 text-rose-400 hover:text-rose-300 transition flex items-center gap-2.5 cursor-pointer font-bold border-t border-slate-800/80 mt-1"
+                        >
+                          🚪 Log Out
+                        </button>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

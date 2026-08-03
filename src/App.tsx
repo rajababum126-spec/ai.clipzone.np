@@ -580,15 +580,7 @@ export default function App() {
     setIsAdminLoadingKeys(true);
 
     try {
-      // 3-second timeout safeguard to prevent hanging indefinitely on slow network / offline mode
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('TIMEOUT')), 3000);
-      });
-
-      const querySnapshot: any = await Promise.race([
-        getDocs(collection(db, 'activation_keys')),
-        timeoutPromise
-      ]);
+      const querySnapshot = await getDocs(collection(db, 'activation_keys'));
 
       const keys: any[] = [];
       querySnapshot.forEach((doc: any) => {
@@ -598,7 +590,7 @@ export default function App() {
       setAllActivationKeys(keys);
       localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(keys));
     } catch (err: any) {
-      console.error('Failed or timed out loading keys for admin:', err);
+      console.error('Failed loading keys for admin:', err);
       // Fallback to cache if available
       const fallbackCached = localStorage.getItem('clipzone_admin_keys_cache');
       if (fallbackCached) {
@@ -606,12 +598,8 @@ export default function App() {
           setAllActivationKeys(JSON.parse(fallbackCached));
         } catch (e) {}
       }
-      if (err?.message === 'TIMEOUT') {
-        showToast('Database connection timed out. Showing cached key database.', 'info');
-      } else if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
+      if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
         showToast('Database connection restricted. Showing cached key database.', 'info');
-      } else {
-        showToast('Loaded key database from local cache.', 'info');
       }
     } finally {
       setIsAdminLoadingKeys(false);

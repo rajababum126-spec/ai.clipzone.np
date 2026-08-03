@@ -557,15 +557,39 @@ export default function App() {
       ]);
       const firestoreKeys: any[] = [];
       const firestoreActiveIds: string[] = [];
-      querySnapshot.forEach((doc: any) => {
-        const data = doc.data();
-        if (data.status === 'used' && (data.activeDeviceId === deviceId || !data.activeDeviceId)) {
-          firestoreKeys.push({ id: doc.id, ...data });
+      querySnapshot.forEach((docSnap: any) => {
+        const data = docSnap.data();
+        if (data.status === 'used') {
+          // Re-claim device session if student logs back in
+          if (data.activeDeviceId !== deviceId) {
+            data.activeDeviceId = deviceId;
+            try {
+              updateDoc(doc(db, 'activation_keys', docSnap.id), { activeDeviceId: deviceId });
+            } catch (e) {}
+          }
+          firestoreKeys.push({ id: docSnap.id, ...data });
           if (data.courseId) {
             firestoreActiveIds.push(data.courseId);
           }
         }
       });
+
+      // Also sync active device status to local admin cache if present
+      try {
+        const adminCache = JSON.parse(localStorage.getItem('clipzone_admin_keys_cache') || '[]');
+        if (adminCache.length > 0) {
+          const firestoreMap = new Map(firestoreKeys.map(k => [k.code || k.id, k.activeDeviceId]));
+          const updatedCache = adminCache.map((k: any) => {
+            const code = k.code || k.id;
+            if (firestoreMap.has(code)) {
+              return { ...k, activeDeviceId: firestoreMap.get(code) };
+            }
+            return k;
+          });
+          localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updatedCache));
+          setAllActivationKeys(updatedCache);
+        }
+      } catch (e) {}
 
       // Safely MERGE Firestore results with existing local activations
       const activeIdsSet = new Set([...firestoreActiveIds, ...localActivatedCourses]);
@@ -711,6 +735,7 @@ export default function App() {
   const handleStudentLogout = async () => {
     // Save active codes string before clearing storage
     const activeCodesStr = localStorage.getItem('clipzone_active_codes');
+    const activatedKeysInfoStr = localStorage.getItem('clipzone_activated_keys_info');
 
     // Immediately clear local storage keys
     localStorage.removeItem('clipzone_student_name');
@@ -727,23 +752,50 @@ export default function App() {
     setShowProfileModal(false);
     setShowUserMenu(false);
 
-    // Release device claims in Firestore for active codes
+    // Release device claims in Firestore for active codes so Session shows "⚪ Logged Out"
+    const codesToRelease = new Set<string>();
     if (activeCodesStr) {
       try {
-        const activeCodes: string[] = JSON.parse(activeCodesStr);
-        for (const code of activeCodes) {
-          try {
-            await updateDoc(doc(db, 'activation_keys', code), {
-              activeDeviceId: '',
-              claimedByUid: ''
-            });
-          } catch (err) {
-            console.error(`Failed to release code ${code} during logout:`, err);
-          }
+        const parsed = JSON.parse(activeCodesStr);
+        if (Array.isArray(parsed)) parsed.forEach((c: string) => codesToRelease.add(c));
+      } catch (e) {}
+    }
+    if (activatedKeysInfoStr) {
+      try {
+        const parsed = JSON.parse(activatedKeysInfoStr);
+        if (Array.isArray(parsed)) parsed.forEach((k: any) => {
+          const code = k.code || k.id;
+          if (code) codesToRelease.add(code);
+        });
+      } catch (e) {}
+    }
+
+    if (codesToRelease.size > 0) {
+      for (const code of codesToRelease) {
+        try {
+          // DO NOT clear claimedByUid or studentName! Only clear activeDeviceId so admin sees Session: Logged Out
+          await updateDoc(doc(db, 'activation_keys', code), {
+            activeDeviceId: ''
+          });
+        } catch (err) {
+          console.error(`Failed to release code ${code} during logout:`, err);
         }
-      } catch (err) {
-        console.warn('Error releasing activation codes during logout:', err);
       }
+
+      // Also update local admin key cache if present so admin UI reflects logout immediately
+      try {
+        const adminCache = JSON.parse(localStorage.getItem('clipzone_admin_keys_cache') || '[]');
+        if (adminCache.length > 0) {
+          const updatedCache = adminCache.map((k: any) => {
+            if (codesToRelease.has(k.code || k.id)) {
+              return { ...k, activeDeviceId: '' };
+            }
+            return k;
+          });
+          localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updatedCache));
+          setAllActivationKeys(updatedCache);
+        }
+      } catch (e) {}
     }
 
     // Sign out from Firebase auth

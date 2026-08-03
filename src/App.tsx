@@ -401,27 +401,42 @@ export default function App() {
       const activeCodes: string[] = JSON.parse(activeCodesStr);
       if (activeCodes.length === 0) return;
 
+      const localActivatedCourses: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
       const updatedActiveCodes: string[] = [];
-      const updatedCourseIds: string[] = [];
+      const updatedCourseIdsSet = new Set<string>(localActivatedCourses);
       let sessionTerminated = false;
       let terminatedCode = '';
 
       for (const code of activeCodes) {
-        const keyDocSnap = await getDoc(doc(db, 'activation_keys', code));
-        if (keyDocSnap.exists()) {
-          const keyData = keyDocSnap.data();
-          if (keyData.activeDeviceId === deviceId) {
-            updatedActiveCodes.push(code);
-            if (keyData.courseId) {
-              updatedCourseIds.push(keyData.courseId);
+        try {
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 1500));
+          const keyDocSnap: any = await Promise.race([
+            getDoc(doc(db, 'activation_keys', code)),
+            timeoutPromise
+          ]);
+          if (keyDocSnap && keyDocSnap.exists && keyDocSnap.exists()) {
+            const keyData = keyDocSnap.data();
+            if (keyData.activeDeviceId === deviceId || !keyData.activeDeviceId) {
+              updatedActiveCodes.push(code);
+              if (keyData.courseId) {
+                updatedCourseIdsSet.add(keyData.courseId);
+              }
+            } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
+              sessionTerminated = true;
+              terminatedCode = code;
+              if (keyData.courseId) {
+                updatedCourseIdsSet.delete(keyData.courseId);
+              }
             }
-          } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
-            sessionTerminated = true;
-            terminatedCode = code;
+          } else {
+            updatedActiveCodes.push(code);
           }
+        } catch (e) {
+          updatedActiveCodes.push(code);
         }
       }
 
+      const updatedCourseIds = Array.from(updatedCourseIdsSet);
       localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedActiveCodes));
       localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedCourseIds));
       setActiveCourseIds(updatedCourseIds);
@@ -525,39 +540,54 @@ export default function App() {
   }, [isAdminActivated]);
 
   const fetchUserActiveKeys = async (user: FirebaseUser) => {
+    const localActivatedCourses: string[] = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+    const localKeysInfo: any[] = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+
     try {
       const deviceId = getOrCreateDeviceId();
+      // Single field query to avoid composite index requirement in Firestore
       const q = query(
         collection(db, 'activation_keys'),
-        where('claimedByUid', '==', user.uid),
-        where('status', '==', 'used')
+        where('claimedByUid', '==', user.uid)
       );
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2000));
       const querySnapshot: any = await Promise.race([
         getDocs(q),
         timeoutPromise
       ]);
-      const keys: any[] = [];
-      const activeIds: string[] = [];
+      const firestoreKeys: any[] = [];
+      const firestoreActiveIds: string[] = [];
       querySnapshot.forEach((doc: any) => {
         const data = doc.data();
-        // ONLY count as active on this device if activeDeviceId matches!
-        if (data.activeDeviceId === deviceId) {
-          keys.push({ id: doc.id, ...data });
+        if (data.status === 'used' && (data.activeDeviceId === deviceId || !data.activeDeviceId)) {
+          firestoreKeys.push({ id: doc.id, ...data });
           if (data.courseId) {
-            activeIds.push(data.courseId);
+            firestoreActiveIds.push(data.courseId);
           }
         }
       });
 
-      setUserActivationKeys(keys);
-      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(keys));
-      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(activeIds));
-      setActiveCourseIds(activeIds);
+      // Safely MERGE Firestore results with existing local activations
+      const activeIdsSet = new Set([...firestoreActiveIds, ...localActivatedCourses]);
+      const mergedActiveIds = Array.from(activeIdsSet);
+
+      const mergedKeysMap = new Map();
+      for (const k of localKeysInfo) {
+        if (k.id || k.code) mergedKeysMap.set(k.id || k.code, k);
+      }
+      for (const k of firestoreKeys) {
+        if (k.id || k.code) mergedKeysMap.set(k.id || k.code, k);
+      }
+      const mergedKeys = Array.from(mergedKeysMap.values());
+
+      setUserActivationKeys(mergedKeys);
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(mergedKeys));
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(mergedActiveIds));
+      setActiveCourseIds(mergedActiveIds);
     } catch (err) {
       console.error('Error fetching student keys:', err);
-      const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-      setActiveCourseIds(localActivated);
+      setActiveCourseIds(localActivatedCourses);
+      setUserActivationKeys(localKeysInfo);
     }
   };
 

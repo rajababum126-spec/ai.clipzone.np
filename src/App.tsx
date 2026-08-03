@@ -566,29 +566,52 @@ export default function App() {
 
   // Fetch all keys for Admin panel
   const fetchAdminKeys = async () => {
+    // First, load cached keys immediately so the user doesn't see a blank spinner if cache exists
+    const cached = localStorage.getItem('clipzone_admin_keys_cache');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAllActivationKeys(parsed);
+        }
+      } catch (e) {}
+    }
+
     setIsAdminLoadingKeys(true);
 
     try {
-      const querySnapshot = await getDocs(collection(db, 'activation_keys'));
+      // 3-second timeout safeguard to prevent hanging indefinitely on slow network / offline mode
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT')), 3000);
+      });
+
+      const querySnapshot: any = await Promise.race([
+        getDocs(collection(db, 'activation_keys')),
+        timeoutPromise
+      ]);
+
       const keys: any[] = [];
-      querySnapshot.forEach((doc) => {
+      querySnapshot.forEach((doc: any) => {
         keys.push({ id: doc.id, ...doc.data() });
       });
       keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setAllActivationKeys(keys);
       localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(keys));
     } catch (err: any) {
-      console.error('Failed to load keys for admin:', err);
-      const cached = localStorage.getItem('clipzone_admin_keys_cache');
-      if (cached) {
+      console.error('Failed or timed out loading keys for admin:', err);
+      // Fallback to cache if available
+      const fallbackCached = localStorage.getItem('clipzone_admin_keys_cache');
+      if (fallbackCached) {
         try {
-          setAllActivationKeys(JSON.parse(cached));
+          setAllActivationKeys(JSON.parse(fallbackCached));
         } catch (e) {}
       }
-      if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
+      if (err?.message === 'TIMEOUT') {
+        showToast('Database connection timed out. Showing cached key database.', 'info');
+      } else if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
         showToast('Database connection restricted. Showing cached key database.', 'info');
       } else {
-        showToast('Loaded key database from local storage.', 'info');
+        showToast('Loaded key database from local cache.', 'info');
       }
     } finally {
       setIsAdminLoadingKeys(false);
@@ -4244,7 +4267,7 @@ export default function App() {
                       onClick={fetchAdminKeys}
                       className="text-purple-600 hover:text-purple-800 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer"
                     >
-                      🔄 Refresh
+                      <span className={isAdminLoadingKeys ? "animate-spin inline-block" : ""}>🔄</span> Refresh
                     </button>
                   </div>
 
@@ -4262,7 +4285,7 @@ export default function App() {
 
                   {/* Registry table wrapper */}
                   <div className="border border-slate-100 rounded-2xl overflow-hidden max-h-[350px] overflow-y-auto bg-white shadow-xs">
-                    {isAdminLoadingKeys ? (
+                    {isAdminLoadingKeys && allActivationKeys.length === 0 ? (
                       <div className="p-8 text-center text-xs text-slate-400 font-semibold flex items-center justify-center gap-2">
                         <span className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
                         Loading key register database...

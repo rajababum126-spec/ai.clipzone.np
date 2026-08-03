@@ -414,18 +414,29 @@ export default function App() {
             getDoc(doc(db, 'activation_keys', code)),
             timeoutPromise
           ]);
-          if (keyDocSnap && keyDocSnap.exists && keyDocSnap.exists()) {
-            const keyData = keyDocSnap.data();
-            if (keyData.activeDeviceId === deviceId || !keyData.activeDeviceId) {
-              updatedActiveCodes.push(code);
-              if (keyData.courseId) {
-                updatedCourseIdsSet.add(keyData.courseId);
+          if (keyDocSnap && typeof keyDocSnap.exists === 'function') {
+            if (keyDocSnap.exists()) {
+              const keyData = keyDocSnap.data();
+              if (keyData.activeDeviceId === deviceId || !keyData.activeDeviceId) {
+                updatedActiveCodes.push(code);
+                if (keyData.courseId) {
+                  updatedCourseIdsSet.add(keyData.courseId);
+                }
+              } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
+                sessionTerminated = true;
+                terminatedCode = code;
+                if (keyData.courseId) {
+                  updatedCourseIdsSet.delete(keyData.courseId);
+                }
               }
-            } else if (keyData.activeDeviceId && keyData.activeDeviceId !== deviceId) {
+            } else {
+              // Code was DELETED by Admin from Firestore!
               sessionTerminated = true;
               terminatedCode = code;
-              if (keyData.courseId) {
-                updatedCourseIdsSet.delete(keyData.courseId);
+              const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+              const keyInfo = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+              if (keyInfo && keyInfo.courseId) {
+                updatedCourseIdsSet.delete(keyInfo.courseId);
               }
             }
           } else {
@@ -591,23 +602,35 @@ export default function App() {
         }
       } catch (e) {}
 
-      // Safely MERGE Firestore results with existing local activations
-      const activeIdsSet = new Set([...firestoreActiveIds, ...localActivatedCourses]);
-      const mergedActiveIds = Array.from(activeIdsSet);
+      // Firestore is ground truth: filter out any key that was deleted from Firestore
+      const firestoreCodeSet = new Set(firestoreKeys.map(k => k.code || k.id));
+      const firestoreCourseSet = new Set(firestoreActiveIds);
 
-      const mergedKeysMap = new Map();
-      for (const k of localKeysInfo) {
-        if (k.id || k.code) mergedKeysMap.set(k.id || k.code, k);
-      }
+      // Keep local keys only if they were newly claimed locally/offline and not yet deleted on cloud
+      const finalKeysMap = new Map();
       for (const k of firestoreKeys) {
-        if (k.id || k.code) mergedKeysMap.set(k.id || k.code, k);
+        if (k.id || k.code) finalKeysMap.set(k.id || k.code, k);
       }
-      const mergedKeys = Array.from(mergedKeysMap.values());
+      for (const k of localKeysInfo) {
+        const keyId = k.id || k.code;
+        if (keyId && (keyId.startsWith('local_') || firestoreCodeSet.has(keyId))) {
+          if (!finalKeysMap.has(keyId)) finalKeysMap.set(keyId, k);
+        }
+      }
+      const finalKeys = Array.from(finalKeysMap.values());
 
-      setUserActivationKeys(mergedKeys);
-      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(mergedKeys));
-      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(mergedActiveIds));
-      setActiveCourseIds(mergedActiveIds);
+      const finalActiveIdsSet = new Set<string>();
+      for (const k of finalKeys) {
+        if (k.courseId && (firestoreCourseSet.has(k.courseId) || (k.id || k.code)?.startsWith('local_'))) {
+          finalActiveIdsSet.add(k.courseId);
+        }
+      }
+      const finalActiveIds = Array.from(finalActiveIdsSet);
+
+      setUserActivationKeys(finalKeys);
+      localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(finalKeys));
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(finalActiveIds));
+      setActiveCourseIds(finalActiveIds);
     } catch (err) {
       console.error('Error fetching student keys:', err);
       setActiveCourseIds(localActivatedCourses);
@@ -886,56 +909,55 @@ export default function App() {
     try {
       const deviceId = getOrCreateDeviceId();
 
-      // Look up key in local cache & state first (instant response)
       let keyData: any = null;
       let keyDocRef = null;
-      let firestoreError = false;
+      let checkedFirestore = false;
+      let existsInFirestore = false;
 
-      const cachedKeysStr = localStorage.getItem('clipzone_admin_keys_cache');
-      let cachedKeys: any[] = [];
-      try {
-        if (cachedKeysStr) cachedKeys = JSON.parse(cachedKeysStr);
-      } catch (e) {}
-
-      const localKeyMatch = cachedKeys.find((k: any) => (k.code || k.id) === cleanCode) 
-        || allActivationKeys.find((k: any) => (k.code || k.id) === cleanCode);
-
-      if (localKeyMatch) {
-        keyData = localKeyMatch;
-      }
-
-      // Query Firestore with a 2-second timeout safeguard so it never hangs indefinitely
+      // 1. Query Firestore first (authoritative source)
       try {
         keyDocRef = doc(db, 'activation_keys', cleanCode);
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2500));
         const keyDocSnap: any = await Promise.race([
           getDoc(keyDocRef),
           timeoutPromise
         ]);
-        if (keyDocSnap && keyDocSnap.exists && keyDocSnap.exists()) {
-          keyData = keyDocSnap.data();
+
+        if (keyDocSnap && typeof keyDocSnap.exists === 'function') {
+          checkedFirestore = true;
+          if (keyDocSnap.exists()) {
+            existsInFirestore = true;
+            keyData = keyDocSnap.data();
+          } else {
+            existsInFirestore = false;
+            keyData = null; // Key was deleted by Admin or never created!
+          }
         }
       } catch (dbErr) {
-        console.warn('Failed to query activation key from Firestore, using offline sandbox lookup:', dbErr);
-        firestoreError = true;
+        console.warn('Firestore query timeout or error during key lookup:', dbErr);
       }
 
-      // If keyData is still null, but cleanCode starts with CLIP- or firestoreError is true, construct fallback key metadata
-      if (!keyData) {
-        if (firestoreError || cleanCode.startsWith('CLIP-')) {
-          const fallbackCourse = courses && courses.length > 0 ? courses[0] : { id: 'course-1', title: 'Premiere Pro Course' };
-          keyData = {
-            code: cleanCode,
-            courseId: fallbackCourse.id,
-            courseTitle: fallbackCourse.title,
-            duration: '1year',
-            status: 'unused'
-          };
-        } else {
-          showToast('अमान्य सेक्रेट कोड! कृपया कोड चेक गरेर पुनः प्रयास गर्नुहोस्। (Invalid secret code)', 'error');
-          setIsActivating(false);
-          return;
+      // 2. If Firestore could not be checked (e.g. timeout or offline), check local Admin Key cache
+      if (!checkedFirestore) {
+        const cachedKeysStr = localStorage.getItem('clipzone_admin_keys_cache');
+        let cachedKeys: any[] = [];
+        try {
+          if (cachedKeysStr) cachedKeys = JSON.parse(cachedKeysStr);
+        } catch (e) {}
+
+        const localKeyMatch = cachedKeys.find((k: any) => (k.code || k.id) === cleanCode) 
+          || allActivationKeys.find((k: any) => (k.code || k.id) === cleanCode);
+
+        if (localKeyMatch) {
+          keyData = localKeyMatch;
         }
+      }
+
+      // STRICT VALIDATION: Reject if key was never created by Admin or was deleted by Admin
+      if (!keyData || (checkedFirestore && !existsInFirestore) || keyData.status === 'deleted') {
+        showToast('❌ अमान्य वा मेटाइएको सेक्रेट कोड! कृपया Admin ले दिएको सही कोड राख्नुहोस्। (Invalid or deleted code)', 'error');
+        setIsActivating(false);
+        return;
       }
 
       // Automatically get Student Name assigned by Admin to this key
@@ -1150,19 +1172,38 @@ export default function App() {
   const handleDeleteActivationKey = async (code: string) => {
     if (!window.confirm(`Are you sure you want to delete secret code ${code}?`)) return;
 
-    // Instantly update UI and local cache
-    setAllActivationKeys(prev => {
-      const updated = prev.filter(k => k.code !== code && k.id !== code);
-      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
-      return updated;
-    });
-
+    // 1. Delete document from Firestore
     try {
       await deleteDoc(doc(db, 'activation_keys', code));
       showToast(`Secret code ${code} deleted successfully.`, 'success');
     } catch (err) {
       console.error('Failed to delete key from Firestore:', err);
       showToast(`Secret code ${code} deleted locally.`, 'info');
+    }
+
+    // 2. Instantly update Admin state and local admin cache
+    setAllActivationKeys(prev => {
+      const updated = prev.filter(k => (k.code || k.id) !== code);
+      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      return updated;
+    });
+
+    // 3. Instantly revoke student active code & course if activated on this device
+    const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+    const updatedActiveCodes = activeCodes.filter((c: string) => c !== code);
+    localStorage.setItem('clipzone_active_codes', JSON.stringify(updatedActiveCodes));
+
+    const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+    const keyInfo = localKeysInfo.find((k: any) => (k.code || k.id) === code);
+    const updatedKeysInfo = localKeysInfo.filter((k: any) => (k.code || k.id) !== code);
+    localStorage.setItem('clipzone_activated_keys_info', JSON.stringify(updatedKeysInfo));
+    setUserActivationKeys(updatedKeysInfo);
+
+    if (keyInfo && keyInfo.courseId) {
+      const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
+      const updatedActivated = localActivated.filter((id: string) => id !== keyInfo.courseId);
+      localStorage.setItem('clipzone_local_activated_courses', JSON.stringify(updatedActivated));
+      setActiveCourseIds(updatedActivated);
     }
   };
 

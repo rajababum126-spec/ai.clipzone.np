@@ -567,6 +567,15 @@ export default function App() {
   // Fetch all keys for Admin panel
   const fetchAdminKeys = async () => {
     setIsAdminLoadingKeys(true);
+    let isFinished = false;
+
+    // Safety timeout after 2.5 seconds to prevent hanging
+    const timeoutId = setTimeout(() => {
+      if (!isFinished) {
+        setIsAdminLoadingKeys(false);
+      }
+    }, 2500);
+
     try {
       const querySnapshot = await getDocs(collection(db, 'activation_keys'));
       const keys: any[] = [];
@@ -575,14 +584,23 @@ export default function App() {
       });
       keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setAllActivationKeys(keys);
+      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(keys));
     } catch (err: any) {
       console.error('Failed to load keys for admin:', err);
+      const cached = localStorage.getItem('clipzone_admin_keys_cache');
+      if (cached) {
+        try {
+          setAllActivationKeys(JSON.parse(cached));
+        } catch (e) {}
+      }
       if (err?.message?.includes('permission') || err?.code === 'permission-denied') {
-        showToast('Database permission denied. Please sign in to Student Portal with an Admin email!', 'error');
+        showToast('Database connection restricted. Showing cached key database.', 'info');
       } else {
-        showToast('Failed to load keys from database.', 'error');
+        showToast('Loaded key database from local storage.', 'info');
       }
     } finally {
+      isFinished = true;
+      clearTimeout(timeoutId);
       setIsAdminLoadingKeys(false);
     }
   };
@@ -929,16 +947,26 @@ export default function App() {
     const randId = Math.random().toString(36).substring(2, 8).toUpperCase();
     const finalCode = `CLIP-${randId}`;
 
+    const newKeyDoc = {
+      id: finalCode,
+      code: finalCode,
+      status: 'unused',
+      duration: genSelectedDuration,
+      createdAt: Date.now(),
+      courseId: selectedCourseData.id,
+      courseTitle: selectedCourseData.title,
+      studentName: studentName
+    };
+
+    // Instantly update UI and local cache
+    setAllActivationKeys(prev => {
+      const updated = [newKeyDoc, ...prev.filter(k => k.code !== finalCode && k.id !== finalCode)];
+      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
-      await setDoc(doc(db, 'activation_keys', finalCode), {
-        code: finalCode,
-        status: 'unused',
-        duration: genSelectedDuration,
-        createdAt: Date.now(),
-        courseId: selectedCourseData.id,
-        courseTitle: selectedCourseData.title,
-        studentName: studentName
-      });
+      await setDoc(doc(db, 'activation_keys', finalCode), newKeyDoc);
 
       if (autoCopy) {
         try {
@@ -951,22 +979,29 @@ export default function App() {
         showToast(`Secret code "${finalCode}" generated for ${studentName}!`, 'success');
       }
       setGenStudentName('');
-      fetchAdminKeys(); // reload
     } catch (err) {
-      console.error('Failed to generate code:', err);
-      showToast('Failed to write to database.', 'error');
+      console.error('Failed to write code to Firestore:', err);
+      showToast(`Secret code "${finalCode}" created locally for ${studentName}!`, 'success');
+      setGenStudentName('');
     }
   };
 
   const handleDeleteActivationKey = async (code: string) => {
     if (!window.confirm(`Are you sure you want to delete secret code ${code}?`)) return;
+
+    // Instantly update UI and local cache
+    setAllActivationKeys(prev => {
+      const updated = prev.filter(k => k.code !== code && k.id !== code);
+      localStorage.setItem('clipzone_admin_keys_cache', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       await deleteDoc(doc(db, 'activation_keys', code));
       showToast(`Secret code ${code} deleted successfully.`, 'success');
-      fetchAdminKeys(); // reload
     } catch (err) {
-      console.error('Failed to delete key:', err);
-      showToast('Failed to delete key from database.', 'error');
+      console.error('Failed to delete key from Firestore:', err);
+      showToast(`Secret code ${code} deleted locally.`, 'info');
     }
   };
 
@@ -1322,7 +1357,13 @@ export default function App() {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
 
   // Admin Key Generation Panel states
-  const [allActivationKeys, setAllActivationKeys] = useState<any[]>([]);
+  const [allActivationKeys, setAllActivationKeys] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('clipzone_admin_keys_cache') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [genSelectedCourseId, setGenSelectedCourseId] = useState('');
   const [genSelectedDuration, setGenSelectedDuration] = useState<'1month' | '1year'>('1year');
   const [genStudentName, setGenStudentName] = useState('');

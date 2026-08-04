@@ -44,7 +44,13 @@ import {
   Share2,
   Award,
   RotateCw,
-  LogOut
+  LogOut,
+  Volume2,
+  VolumeX,
+  Copy,
+  Zap,
+  RotateCcw,
+  Wand2
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -1647,12 +1653,17 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       sender: 'bot',
-      text: 'नमस्ते! 👋\nम AI Clipzone Assistant हुँ।\nCourse, price, payment, access आदि जुनसुकै प्रश्न सोध्नुहोस्।',
+      text: 'नमस्ते! 👋\nम AI Clipzone Nepal को Advanced AI Assistant हुँ।\nहाम्रा कोर्सहरू, Activation Key, Certificate, eSewa Payment वा AI Tools (Midjourney, Suno, CapCut) सम्बन्धी केही पनि सोध्नुहोस्!',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isSpeechActive, setIsSpeechActive] = useState(false);
+  const [activeChatCategory, setActiveChatCategory] = useState<'all' | 'activation' | 'prompts' | 'payment' | 'video'>('all');
+  const [showPromptBuilder, setShowPromptBuilder] = useState(false);
+  const [promptTopic, setPromptTopic] = useState('');
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Toast helper
@@ -1929,7 +1940,7 @@ export default function App() {
     const whatsappUrl = `https://wa.me/9779763323268?text=${encodeURIComponent(fullMessage)}`;
     window.open(whatsappUrl, '_blank');
     
-    // Clear inputs
+    // Clear Inputs
     setContactName('');
     setContactPhone('');
     setContactCourse('General Inquiry / सामान्य सोधपुछ');
@@ -1937,18 +1948,115 @@ export default function App() {
     showToast('तपाईंको सन्देश WhatsApp मा पठाइयो।', 'success');
   };
 
+  const speakBotResponse = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      if (isSpeechActive) {
+        setIsSpeechActive(false);
+        return;
+      }
+      const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const neOrHiVoice = voices.find(v => v.lang.includes('ne') || v.lang.includes('hi') || v.lang.includes('en'));
+      if (neOrHiVoice) utterance.voice = neOrHiVoice;
+      utterance.onend = () => setIsSpeechActive(false);
+      utterance.onerror = () => setIsSpeechActive(false);
+      window.speechSynthesis.speak(utterance);
+      setIsSpeechActive(true);
+      showToast('भ्वाइस रिडिङ सुरु भयो 🔊 (Reading response aloud)', 'info');
+    } catch (e) {
+      console.warn('Speech synthesis error:', e);
+    }
+  };
+
+  const handleCopyChatMessage = (text: string) => {
+    const clean = text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+    navigator.clipboard.writeText(clean);
+    showToast('जवाफ कपी गरियो! (Copied to clipboard)', 'info');
+  };
+
+  const handleClearChatHistory = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeechActive(false);
+    setChatMessages([
+      {
+        sender: 'bot',
+        text: 'नमस्ते! 👋\nम AI Clipzone Nepal को Advanced AI Assistant हुँ।\nहाम्रा कोर्सहरू, Activation Key, Certificate, eSewa Payment वा AI Tools सम्बन्धी केही पनि सोध्नुहोस्!',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+    showToast('च्याट रिसेट गरियो 🔄', 'info');
+  };
+
+  const handleGeneratePromptTool = (topic: string) => {
+    if (!topic.trim()) return;
+    const promptText = `✨ <strong>AI Master Prompt Results for "${topic}":</strong><br/><br/>
+    🎨 <strong>1. Midjourney v6 / DALL-E Photo Prompt:</strong><br/>
+    <span class="text-purple-700 font-mono text-xs block bg-purple-50 p-2 rounded border border-purple-200 mt-1 select-all">/imagine prompt: Ultra-realistic 8k cinematic studio portrait of ${topic}, hyper-detailed lighting, 85mm lens f/1.4, Octane Render, 32k resolution --ar 16:9 --style raw --v 6.0</span><br/>
+    
+    📝 <strong>2. ChatGPT Script & Hook Prompt:</strong><br/>
+    <span class="text-indigo-700 font-mono text-xs block bg-indigo-50 p-2 rounded border border-indigo-200 mt-1 select-all">Act as a viral content creator. Write a high-retention 60-second video script about "${topic}". Include a 3-second hook, visual B-roll cues, and strong Call To Action.</span><br/>
+    
+    🎵 <strong>3. Suno AI Music Prompt:</strong><br/>
+    <span class="text-amber-700 font-mono text-xs block bg-amber-50 p-2 rounded border border-amber-200 mt-1 select-all">[Genre: Modern Nepali Electro Folk, Mood: Energetic, Tempo: 120 BPM, Lead: Clear Vocal] "${topic}"</span>`;
+
+    setChatMessages(prev => [
+      ...prev,
+      { sender: 'user', text: `Generate AI Prompts for: ${topic}`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+      { sender: 'bot', text: promptText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+    ]);
+    setShowPromptBuilder(false);
+    setPromptTopic('');
+  };
+
   const getLocalAIResponse = (query: string): string => {
     const q = query.toLowerCase().trim();
     
     // Greeting
     if (q === 'hi' || q === 'hello' || q === 'namaste' || q.includes('नमस्ते') || q === 'hey') {
-      return `नमस्ते! 🙏 AI Clipzone Nepal को आधिकारिक च्याटबोटमा यहाँलाई स्वागत छ। म यहाँलाई हाम्रा प्रिमियम AI कोर्षहरू खरिद गर्न र सिक्न मद्दत गर्नेछु। तपाईंलाई के सम्बन्धी जानकारी चाहिन्छ सोध्नुहोस्! 😊`;
+      return `नमस्ते! 🙏 AI Clipzone Nepal को आधिकारिक AI Assistant मा यहाँलाई स्वागत छ। म यहाँलाई हाम्रा प्रिमियम AI कोर्षहरू, Activation Code, Certificate, eSewa Payment र AI Tools (Midjourney, ChatGPT, Suno AI, CapCut) सम्बन्धी जुनसुकै सहयोग गर्न तयार छु! 😊`;
+    }
+
+    // Code / Activation Key / Invalid Key
+    if (q.includes('code') || q.includes('activation') || q.includes('की') || q.includes('कोड') || q.includes('invalid') || q.includes('अमान्य') || q.includes('key')) {
+      return `🔑 <strong>Course Activation Code सम्बन्धी जानकारी:</strong><br/><br/>
+      • <strong>कोड कसरी पाइन्छ?</strong> भुक्तानी (eSewa ID: 9763323268) गरिसकेपछि स्क्रीनसट WhatsApp मा पठाउनासाथ तपाईंलाई गोप्य Activation Code उपलब्ध गराइन्छ।<br/>
+      • <strong>कोड कसरी प्रयोग गर्ने?</strong> माथिल्लो मेनुमा रहेको <strong>"🔑 Activate Code"</strong> बटन थिचेर आफ्नो कोड हाल्नुहोस्।<br/>
+      • <strong>Invalid / Error देखाए के गर्ने?</strong><br/>
+      1. कोडका अंग्रेजी अक्षरहरू Capital Letter (ठूलो अक्षर) मा छन् कि छैनन् चेक गर्नुहोस्।<br/>
+      2. कोडको अगाडि वा पछाडि अनावश्यक Space परेको छ भने हटाउनुहोस्।<br/>
+      3. सुरक्षा नीति अनुसार एउटा कोड <strong>एक पटकमा १ वटा मोवाइल/डिभाइसमा मात्र</strong> चल्दछ। यदि नयाँ डिभाइसमा खोल्नुभएको छ भने पुरानो डिभाइस लगआउट हुनुपर्छ।<br/>
+      4. थप समस्या भए सिधै हाम्रो <strong>WhatsApp (976-3323268)</strong> मा म्यासेज गर्नुहोस्!`;
+    }
+
+    // Certificate Download & Fixes
+    if (q.includes('certificate') || q.includes('प्रमाणपत्र') || q.includes('सर्टिफिकेट') || q.includes('download') || q.includes('verify')) {
+      return `📜 <strong>Course Certificate कसरी Download गर्ने?</strong><br/><br/>
+      १. आफ्नो <strong>Course Classroom</strong> खोल्नुहोस्।<br/>
+      २. कोर्षको कार्डमा रहेको <strong>"📜 Course Certificate"</strong> बटनमा क्लिक गर्नुहोस्।<br/>
+      ३. आफ्नो नाम टाइप गर्नुहोस् र <strong>"Generate & Print Certificate"</strong> मा थिचेर PDF/Image डाउनलोड गर्नुहोस्।<br/>
+      • <i>नोट:</i> प्रमाण पत्रमा तपाईंको कोर्षको आधिकारीक Unique Code र <strong>"by AI Clipzone Nepal"</strong> छाप समावेस हुनेछ!`;
+    }
+
+    // AI Prompt Generator / Prompts
+    if (q.includes('prompt') || q.includes('प्रम्प्ट') || q.includes('midjourney') || q.includes('chatgpt') || q.includes('ai tool')) {
+      return `🤖 <strong>AI Master Prompt बनाउने तरिका:</strong><br/><br/>
+      तपाईंले हाम्रो च्याटको माथिल्लो toolbar मा रहेको <strong>"✨ Prompt Tool (Wand Icon)"</strong> थिचेर वा कुनै पनि विषय टाइप गरेर मिनेटमै Midjourney, ChatGPT र Suno AI को लागि उत्कृष्ट Prompts प्राप्त गर्न सक्नुहुन्छ!<br/><br/>
+      <strong>Midjourney Prompt Formula:</strong><br/>
+      <code>[Subject] + [Environment/Background] + [Lighting & Style] + [Camera Lens & Aspect Ratio]</code><br/>
+      उदाहरण: <i>/imagine prompt: Futuristic AI robot in Kathmandu street, 8k cinematic lighting, 85mm lens --ar 16:9</i>`;
     }
 
     // Pricing
     if (q.includes('price') || q.includes('कति') || q.includes('मूल्य') || q.includes('paisa') || q.includes('cost') || q.includes('rs') || q.includes('rupees') || q.includes('rate')) {
       return `हाम्रा प्रिमियम कोर्षहरू र तिनको विशेष अफर मूल्यहरू यस प्रकार छन्:<br/><br/>
-      1. <strong>AI Master Class by Dhruv Rathee:</strong> मात्र Rs. 449 (Hindi, 30+ AI Tools)<br/>
+      1. <strong>AI Master Class by AI Clipzone:</strong> मात्र Rs. 449 (Hindi, 30+ AI Tools)<br/>
       2. <strong>AI Video, Image & Song Creation:</strong> मात्र Rs. 350 (Nepali)<br/>
       3. <strong>AI Song Creation Course:</strong> मात्र Rs. 299 (Nepali/Hindi)<br/>
       4. <strong>AI Presentation Making Course:</strong> मात्र Rs. 199 (Nepali/Hindi, Slides Creator)<br/><br/>
@@ -1982,36 +2090,31 @@ export default function App() {
       return `हो! कोर्ष खरिद गरेपछि तपाईंले <strong>Lifetime Access (आजीवन पहुँच)</strong> पाउनुहुन्छ। भविष्यमा थपिने सबै नयाँ भिडियोहरू र अपडेटहरू पनि तपाईंले बिल्कुलै नि:शुल्क पाउनुहुनेछ।`;
     }
 
-    // Certificate
-    if (q.includes('certificate') || q.includes('प्रमाणपत्र') || q.includes('सर्टिफिकेट')) {
-      return `हो, प्रत्येक कोर्ष सफलतापूर्वक पूरा गरेपछि तपाईंले <strong>Professional Certificate of Completion</strong> प्राप्त गर्नुहुनेछ, जसलाई तपाईंले आफ्नो CV वा LinkedIn प्रोफाइलमा राख्न सक्नुहुन्छ।`;
-    }
-
     // Specific Course: Dhruv Rathee style
     if (q.includes('dhruv') || q.includes('rathee') || q.includes('master') || q.includes('30+')) {
-      return `<strong>AI Master Class by Dhruv Rathee (Hindi) - मात्र Rs. 449:</strong><br/>
-      यो कोर्षमा ChatGPT, Midjourney, Runway, ElevenLabs, Leonardo AI जस्ता ३० भन्दा बढी प्रिमियम AI tools को पूर्ण प्रयोगात्मक जानकारी समावेस छ। यो हाम्रो "Best Seller" कोर्ष हो।`;
+      return `<strong>AI Master Class (Hindi & Nepali) - मात्र Rs. 449:</strong><br/>
+      यो कोर्षमा ChatGPT, Midjourney, Runway, ElevenLabs, Leonardo AI जस्ता ३० भन्दा बढी प्रिमियम AI tools को पूर्ण प्रयोगात्मक जानकारी समावेस छ।`;
     }
 
-    // Specific Course: Song / Music
+    // Specific Course: Song / Music / Suno
     if (q.includes('song') || q.includes('music') || q.includes('गीत') || q.includes('संगीत') || q.includes('suno')) {
       return `<strong>AI Song Creation Course - मात्र Rs. 299 (Nepali/Hindi):</strong><br/>
       यसमा Suno v3/v4 को प्रयोग गरी आफ्नै लिरिक्स बनाउने, संगीत कम्पोज गर्ने, धून तयार गर्ने, भ्वाइस क्लोनिङ गर्ने र व्यावसायिक गीतहरू उत्पादन गर्ने तरिका सिकाइन्छ।`;
     }
 
-    // Specific Course: Video
-    if (q.includes('video') || q.includes('भिडियो सम्पादन') || q.includes('avatar') || q.includes('एनिमेसन')) {
+    // Specific Course: Video / CapCut / Avatar
+    if (q.includes('video') || q.includes('भिडियो सम्पादन') || q.includes('avatar') || q.includes('एनिमेसन') || q.includes('capcut')) {
       return `<strong>AI Video, Image & Song Creation - मात्र Rs. 350 (Nepali):</strong><br/>
-      यो नेपाली भाषाको पूर्ण कोर्ष हो जसमा Talking Avatar भिडियोहरू बनाउने, Text-to-Video, र प्रोफेसनल एनिमेटेड भिडियो सम्पादन गर्न सिकाइन्छ।`;
+      यो नेपाली भाषाको पूर्ण कोर्ष हो जसमा Talking Avatar भिडियोहरू बनाउने, Text-to-Video, CapCut Transitions, र प्रोफेसनल एनिमेटेड भिडियो सम्पादन गर्न सिकाइन्छ।`;
     }
 
     // Specific Course: Presentation / Slides / PPT
     if (q.includes('presentation') || q.includes('slides') || q.includes('ppt') || q.includes('पावरपोइन्ट')) {
       return `<strong>AI Presentation Making Course - मात्र Rs. 199 (Nepali/Hindi):</strong><br/>
-      यसमा Gamma App, Tome, PowerPoint AI को प्रयोग गरी Dhruv Rathee शैलीमा उत्कृष्ट एनिमेटेड स्लाइड र व्यावसायिक कलेज/अफिस प्रस्तुतीकरणहरू मिनेटमै बनाउन सिकाइन्छ।`;
+      यसमा Gamma App, Tome, PowerPoint AI को प्रयोग गरी उत्कृष्ट एनिमेटेड स्लाइड र व्यावसायिक कलेज/अफिस प्रस्तुतीकरणहरू मिनेटमै बनाउन सिकाइन्छ।`;
     }
 
-    return `धन्यवाद! कोर्ष तुरुन्त खरिद गर्न वा थप जानकारीका लागि कृपया हाम्रो आधिकारिक <strong>WhatsApp नम्बर <a href="https://wa.me/9779763323268" target="_blank" class="text-purple-600 font-extrabold underline">976-3323268</a></strong> मा सिधै सम्पर्क गर्नुहोस्। हामी तपाईंलाई तत्काल सहयोग गर्नेछौं!`;
+    return `धन्यवाद! कोर्ष तुरुन्त खरिद गर्न, Activation Code re-issue गर्न वा थप जानकारीका लागि कृपया हाम्रो आधिकारिक <strong>WhatsApp नम्बर <a href="https://wa.me/9779763323268" target="_blank" class="text-purple-600 font-extrabold underline">976-3323268</a></strong> मा सिधै सम्पर्क गर्नुहोस्। हामी तपाईंलाई तत्काल सहयोग गर्नेछौं!`;
   };
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -2087,7 +2190,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-purple-100 selection:text-purple-900 overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-purple-100 selection:text-purple-900 overflow-x-hidden flex flex-col justify-between">
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -2321,7 +2424,7 @@ export default function App() {
       </div>
 
       {/* Main Container for Course List */}
-      <main className="max-w-6xl mx-auto px-4 pt-3 pb-12">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-3 pb-12">
 
         {/* Course Catalog Title & Grid Section */}
         <section id="courses-section" className="pt-2 scroll-mt-24">
@@ -3353,7 +3456,7 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className="bg-slate-900 text-slate-400 text-xs md:text-sm py-12 border-t border-slate-800">
+      <footer className="bg-slate-900 text-slate-400 text-xs md:text-sm py-12 border-t border-slate-800 w-full mt-auto">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-center md:text-left">
             <h5 className="text-white font-extrabold text-base tracking-tight mb-2">
@@ -5087,61 +5190,168 @@ export default function App() {
               animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 50, x: -20 }}
               transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-              className="absolute bottom-20 left-0 w-[340px] md:w-[380px] h-[520px] bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col"
+              className="absolute bottom-20 left-0 w-[340px] md:w-[400px] h-[540px] bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col"
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-purple-700 to-indigo-800 text-white p-5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                    <Bot className="w-6 h-6 text-amber-300" />
+              {/* Top Header Bar */}
+              <div className="bg-gradient-to-r from-purple-800 via-indigo-900 to-slate-900 text-white p-4 flex items-center justify-between border-b border-purple-800/50">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center border border-white/10 relative">
+                    <Bot className="w-5 h-5 text-amber-300" />
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-purple-900 animate-pulse"></span>
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-sm md:text-base tracking-tight text-white">
+                    <h4 className="font-extrabold text-xs md:text-sm tracking-tight text-white flex items-center gap-1.5">
                       AI Clipzone Assistant
+                      <span className="bg-amber-400/20 text-amber-300 text-[9px] px-1.5 py-0.2 rounded-full font-black border border-amber-400/30">PRO AI</span>
                     </h4>
-                    <span className="text-[10px] text-purple-200 block font-bold flex items-center gap-1 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
-                      तुरुन्त जवाफ उपलब्ध छ
+                    <span className="text-[10px] text-purple-200 block font-medium">
+                      नेपालको १ नम्बर AI लर्निङ असिस्टेन्ट
                     </span>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setIsChatOpen(false)}
-                  className="text-purple-200 hover:text-white transition"
+
+                {/* Header Action Tools */}
+                <div className="flex items-center gap-1 text-purple-200">
+                  <button
+                    onClick={() => speakBotResponse(chatMessages[chatMessages.length - 1]?.text || '')}
+                    title={isSpeechActive ? "Stop Voice" : "Voice Reader"}
+                    className={`p-1.5 rounded-lg transition cursor-pointer ${isSpeechActive ? 'bg-amber-400 text-slate-950 animate-pulse' : 'hover:bg-white/10 hover:text-white'}`}
+                  >
+                    {isSpeechActive ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </button>
+
+                  <button
+                    onClick={() => setShowPromptBuilder(!showPromptBuilder)}
+                    title="AI Prompt Builder Tool"
+                    className={`p-1.5 rounded-lg transition cursor-pointer ${showPromptBuilder ? 'bg-purple-600 text-white' : 'hover:bg-white/10 hover:text-white'}`}
+                  >
+                    <Wand2 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={handleClearChatHistory}
+                    title="Reset Chat"
+                    className="p-1.5 hover:bg-white/10 hover:text-white rounded-lg transition cursor-pointer"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+
+                  <button 
+                    onClick={() => setIsChatOpen(false)}
+                    className="p-1.5 hover:bg-white/10 hover:text-white rounded-lg transition cursor-pointer ml-1"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Advanced Prompt Builder Mini Modal View */}
+              {showPromptBuilder && (
+                <div className="bg-gradient-to-r from-purple-900 to-indigo-950 p-3 text-white border-b border-purple-700/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> AI Master Prompt Builder
+                    </span>
+                    <button onClick={() => setShowPromptBuilder(false)} className="text-purple-300 hover:text-white text-xs">Close</button>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={promptTopic}
+                      onChange={(e) => setPromptTopic(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleGeneratePromptTool(promptTopic);
+                      }}
+                      placeholder="विषय लेख्नुहोस् (उदा: Shorts Video, Avatar, Suno Song)..."
+                      className="grow bg-purple-950/80 border border-purple-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-purple-300 focus:outline-hidden"
+                    />
+                    <button
+                      onClick={() => handleGeneratePromptTool(promptTopic)}
+                      className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-3 py-1.5 rounded-xl font-black text-xs transition cursor-pointer shrink-0"
+                    >
+                      Generate ✨
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Category Filter Chips */}
+              <div className="bg-slate-100 p-2 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold text-slate-600 shrink-0 scrollbar-none">
+                <button
+                  onClick={() => setActiveChatCategory('all')}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'all' ? 'bg-purple-700 text-white shadow-xs' : 'bg-white hover:bg-slate-200 text-slate-700'}`}
                 >
-                  <X className="w-5 h-5" />
+                  🔥 FAQs
+                </button>
+                <button
+                  onClick={() => setActiveChatCategory('activation')}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'activation' ? 'bg-purple-700 text-white shadow-xs' : 'bg-white hover:bg-slate-200 text-slate-700'}`}
+                >
+                  🔑 Code & Key
+                </button>
+                <button
+                  onClick={() => setActiveChatCategory('prompts')}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'prompts' ? 'bg-purple-700 text-white shadow-xs' : 'bg-white hover:bg-slate-200 text-slate-700'}`}
+                >
+                  🤖 AI Prompts
+                </button>
+                <button
+                  onClick={() => setActiveChatCategory('payment')}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${activeChatCategory === 'payment' ? 'bg-purple-700 text-white shadow-xs' : 'bg-white hover:bg-slate-200 text-slate-700'}`}
+                >
+                  💳 eSewa Payment
                 </button>
               </div>
 
               {/* Chat messages body */}
-              <div className="grow overflow-y-auto p-5 space-y-4 bg-slate-50">
+              <div className="grow overflow-y-auto p-4 space-y-4 bg-slate-50">
                 {chatMessages.map((msg, idx) => (
                   <div 
                     key={idx}
-                    className={`flex items-start gap-2.5 ${msg.sender === 'user' ? 'justify-end' : ''}`}
+                    className={`flex items-start gap-2 ${msg.sender === 'user' ? 'justify-end' : ''}`}
                   >
                     {msg.sender === 'bot' && (
-                      <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 text-xs">
+                      <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 text-xs mt-0.5">
                         <Bot className="w-4 h-4" />
                       </div>
                     )}
                     
-                    <div className="max-w-[80%] flex flex-col">
+                    <div className="max-w-[85%] flex flex-col group">
                       <div 
                         className={`p-3.5 rounded-2xl text-xs md:text-sm leading-relaxed ${
                           msg.sender === 'user' 
                             ? 'bg-purple-700 text-white rounded-tr-none shadow-sm' 
-                            : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none shadow-xs'
+                            : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none shadow-xs'
                         }`}
                         dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>') }}
                       />
-                      <span className={`text-[9px] text-slate-400 mt-1 font-semibold ${msg.sender === 'user' ? 'text-right' : ''}`}>
-                        {msg.timestamp}
-                      </span>
+                      
+                      {/* Action buttons under message */}
+                      <div className={`flex items-center gap-2 mt-1 text-[10px] text-slate-400 font-medium ${msg.sender === 'user' ? 'justify-end' : 'justify-between'}`}>
+                        <span>{msg.timestamp}</span>
+                        {msg.sender === 'bot' && (
+                          <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition">
+                            <button
+                              onClick={() => handleCopyChatMessage(msg.text)}
+                              className="hover:text-purple-600 flex items-center gap-0.5 cursor-pointer"
+                              title="Copy text"
+                            >
+                              <Copy className="w-3 h-3" /> Copy
+                            </button>
+                            <button
+                              onClick={() => speakBotResponse(msg.text)}
+                              className="hover:text-purple-600 flex items-center gap-0.5 cursor-pointer"
+                              title="Listen"
+                            >
+                              <Volume2 className="w-3 h-3" /> Listen
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {msg.sender === 'user' && (
-                      <div className="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center shrink-0 text-xs font-bold">
+                      <div className="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">
                         <User className="w-4 h-4" />
                       </div>
                     )}
@@ -5153,7 +5363,7 @@ export default function App() {
                       <Bot className="w-4 h-4 text-purple-600 animate-pulse" />
                     </div>
                     <div className="max-w-[80%] flex flex-col">
-                      <div className="bg-white text-slate-800 border border-slate-100 p-3.5 rounded-2xl rounded-tl-none shadow-xs flex items-center gap-1.5">
+                      <div className="bg-white text-slate-800 border border-slate-100 p-3 rounded-2xl rounded-tl-none shadow-xs flex items-center gap-1.5">
                         <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -5165,33 +5375,63 @@ export default function App() {
               </div>
 
               {/* Bottom Quick reply chips & Input bar */}
-              <div className="p-4 bg-white border-t border-slate-100">
+              <div className="p-3 bg-white border-t border-slate-200">
                 
-                {/* Suggestions chips */}
-                <div className="flex flex-wrap gap-2 mb-3">
+                {/* Suggestions chips filtered by active category */}
+                <div className="flex flex-wrap gap-1.5 mb-2 max-h-20 overflow-y-auto">
+                  {(activeChatCategory === 'all' || activeChatCategory === 'payment') && (
+                    <button 
+                      onClick={() => handleSendMessage('Price कति हो?')}
+                      className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[11px] font-bold py-1 px-2.5 rounded-full border border-slate-200 transition cursor-pointer"
+                    >
+                      Price कति हो? 🏷️
+                    </button>
+                  )}
+                  {(activeChatCategory === 'all' || activeChatCategory === 'activation') && (
+                    <button 
+                      onClick={() => handleSendMessage('Activation Code कहाँ पाइन्छ?')}
+                      className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[11px] font-bold py-1 px-2.5 rounded-full border border-slate-200 transition cursor-pointer"
+                    >
+                      Activation Code? 🔑
+                    </button>
+                  )}
+                  {(activeChatCategory === 'all' || activeChatCategory === 'activation') && (
+                    <button 
+                      onClick={() => handleSendMessage('Invalid key देखाए के गर्ने?')}
+                      className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[11px] font-bold py-1 px-2.5 rounded-full border border-slate-200 transition cursor-pointer"
+                    >
+                      Invalid Code Fix? 🚨
+                    </button>
+                  )}
+                  {(activeChatCategory === 'all' || activeChatCategory === 'prompts') && (
+                    <button 
+                      onClick={() => handleSendMessage('Midjourney AI Prompt कसरी बनाउने?')}
+                      className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[11px] font-bold py-1 px-2.5 rounded-full border border-slate-200 transition cursor-pointer"
+                    >
+                      Midjourney Prompts 🎨
+                    </button>
+                  )}
+                  {(activeChatCategory === 'all' || activeChatCategory === 'payment') && (
+                    <button 
+                      onClick={() => handleSendMessage('Payment कसरी गर्ने?')}
+                      className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[11px] font-bold py-1 px-2.5 rounded-full border border-slate-200 transition cursor-pointer"
+                    >
+                      eSewa QR Payment 💳
+                    </button>
+                  )}
+                  {(activeChatCategory === 'all' || activeChatCategory === 'prompts') && (
+                    <button 
+                      onClick={() => handleSendMessage('Suno AI ले गीत कसरी बनाउने?')}
+                      className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[11px] font-bold py-1 px-2.5 rounded-full border border-slate-200 transition cursor-pointer"
+                    >
+                      Suno Music Creation 🎵
+                    </button>
+                  )}
                   <button 
-                    onClick={() => handleSendMessage('Price कति हो?')}
-                    className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-xs font-bold py-1.5 px-3 rounded-full border border-slate-200 transition cursor-pointer"
+                    onClick={() => handleSendMessage('Certificate कसरी Download गर्ने?')}
+                    className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-[11px] font-bold py-1 px-2.5 rounded-full border border-slate-200 transition cursor-pointer"
                   >
-                    Price कति हो?
-                  </button>
-                  <button 
-                    onClick={() => handleSendMessage('Recorded हो कि Live?')}
-                    className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-xs font-bold py-1.5 px-3 rounded-full border border-slate-200 transition cursor-pointer"
-                  >
-                    Recorded कि Live?
-                  </button>
-                  <button 
-                    onClick={() => handleSendMessage('Payment कसरी गर्ने?')}
-                    className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-xs font-bold py-1.5 px-3 rounded-full border border-slate-200 transition cursor-pointer"
-                  >
-                    Payment कसरी गर्ने?
-                  </button>
-                  <button 
-                    onClick={() => handleSendMessage('Lifetime Access?')}
-                    className="bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 text-xs font-bold py-1.5 px-3 rounded-full border border-slate-200 transition cursor-pointer"
-                  >
-                    Lifetime Access?
+                    Certificate Download 📜
                   </button>
                 </div>
 
@@ -5204,15 +5444,24 @@ export default function App() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleSendMessage();
                     }}
-                    placeholder="तपाईंको प्रश्न यहाँ लेख्नुहोस्..."
-                    className="grow bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-full px-4 py-2.5 text-xs md:text-sm transition outline-hidden font-medium"
+                    placeholder="तपाईंको प्रश्न वा विषय यहाँ लेख्नुहोस्..."
+                    className="grow bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-full px-4 py-2 text-xs md:text-sm transition outline-hidden font-medium"
                   />
                   <button 
                     onClick={() => handleSendMessage()}
-                    className="w-10 h-10 bg-purple-700 hover:bg-purple-800 text-white rounded-full flex items-center justify-center shrink-0 shadow-md hover:shadow-lg transition cursor-pointer"
+                    className="w-9 h-9 bg-purple-700 hover:bg-purple-800 text-white rounded-full flex items-center justify-center shrink-0 shadow-md hover:shadow-lg transition cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
                   </button>
+                </div>
+
+                {/* AI Clipzone Nepal Branding Badge anchored at the bottom of the widget */}
+                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-bold bg-slate-900 text-slate-300 px-3 py-1.5 rounded-xl">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>AI Clipzone Assistant</span>
+                  </div>
+                  <span className="text-amber-400 text-[9px] uppercase tracking-wider font-black">AI Clipzone Nepal 🇳🇵</span>
                 </div>
 
               </div>

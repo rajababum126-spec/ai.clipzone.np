@@ -24,7 +24,11 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
-  const certId = initialCertId || `AIC-CERT-${Math.floor(100000 + Math.random() * 900000)}`;
+  const certId = initialCertId || `CLIP-${Math.floor(100000 + Math.random() * 900000)}`;
+
+  const cleanCourseTitle = (courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS')
+    .replace(/by Dhruv Rathee/gi, 'by AI Clipzone')
+    .replace(/Dhruv Rathee/gi, 'AI Clipzone');
 
   // Auto-scale certificate canvas to fit user's modal screen smoothly (mobile or desktop)
   useEffect(() => {
@@ -347,7 +351,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                   className="font-sans font-black text-3xl tracking-wider uppercase my-2 leading-snug max-w-3xl mx-auto px-4 text-[#fef08a]"
                   style={{ textShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}
                 >
-                  {courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS'}
+                  {cleanCourseTitle}
                 </h3>
 
                 {/* COURSE DESCRIPTION SUMMARY */}

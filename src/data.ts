@@ -3,10 +3,10 @@ import { Course, Testimonial, FAQItem } from './types';
 export const COURSES: Course[] = [
   {
     id: "ai-masterclass",
-    title: "AI Master Class by Dhruv Rathee",
+    title: "AI Master Class Course by AI Clipzone",
     price: "Rs. 449",
     amount: 449,
-    message: "I want to buy AI Master Class by Dhruv Rathee",
+    message: "I want to buy AI Master Class Course by AI Clipzone",
     learn: [
       "30+ AI Tools Mastery",
       "AI Video & Image Generation",
@@ -44,10 +44,10 @@ export const COURSES: Course[] = [
   },
   {
     id: "youtube-blueprint",
-    title: "Dhruv Rathee YouTube Blueprint Course",
+    title: "YouTube Blueprint Course by AI Clipzone",
     price: "Rs. 549",
     amount: 549,
-    message: "I want to buy Dhruv Rathee YouTube Blueprint Course",
+    message: "I want to buy YouTube Blueprint Course by AI Clipzone",
     learn: [
       "Channel setup र niche छनोट",
       "💡 Video idea खोज्ने तरिका",
@@ -69,7 +69,7 @@ export const COURSES: Course[] = [
       { chapterTitle: "Chapter 1: Channel Setup & Niche Selection", title: "Lesson 1.4: Competitive Research & Channel Positioning", duration: "12:45", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
 
       // Chapter 2 (4-5 lectures)
-      { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.1: Dhruv Rathee's Secret Topic Selection Framework", duration: "18:20", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
+      { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.1: Pro Creator Secret Topic Selection Framework", duration: "18:20", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
       { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.2: Deep Researching News, History & Trending Topics", duration: "22:15", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
       { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.3: Fact Checking, Data Sources & Case Studies", duration: "16:40", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },
       { chapterTitle: "Chapter 2: Video Ideas & Research Strategy", title: "Lesson 2.4: Organizing Notes, Mindmaps & Research Outlines", duration: "13:10", videoUrl: "https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview" },

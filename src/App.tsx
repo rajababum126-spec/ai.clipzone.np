@@ -215,6 +215,26 @@ export default function App() {
   const [showCourseFormModal, setShowCourseFormModal] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
 
+  // Helper to fetch student's course activation secret code for certificate
+  const getCourseActivationCode = (courseId: string): string => {
+    const keyInfo = userActivationKeys.find(k => k.courseId === courseId || k.id === courseId);
+    if (keyInfo && (keyInfo.code || keyInfo.id)) {
+      return keyInfo.code || keyInfo.id;
+    }
+    try {
+      const localKeysInfo = JSON.parse(localStorage.getItem('clipzone_activated_keys_info') || '[]');
+      const found = localKeysInfo.find((k: any) => k.courseId === courseId || k.id === courseId);
+      if (found && (found.code || found.id)) return found.code || found.id;
+    } catch (e) {}
+
+    try {
+      const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+      if (activeCodes.length > 0) return activeCodes[0];
+    } catch (e) {}
+
+    return '';
+  };
+
   // Course Form Fields
   const [formId, setFormId] = useState('');
   const [formTitle, setFormTitle] = useState('');
@@ -480,8 +500,7 @@ export default function App() {
         } else {
           setCurrentUser(null);
           setUserActivationKeys([]);
-          const localActivated = JSON.parse(localStorage.getItem('clipzone_local_activated_courses') || '[]');
-          setActiveCourseIds(localActivated);
+          setActiveCourseIds([]);
         }
         setAuthLoading(false);
       }
@@ -571,16 +590,18 @@ export default function App() {
       querySnapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
         if (data.status === 'used') {
-          // Re-claim device session if student logs back in
-          if (data.activeDeviceId !== deviceId) {
-            data.activeDeviceId = deviceId;
-            try {
-              updateDoc(doc(db, 'activation_keys', docSnap.id), { activeDeviceId: deviceId });
-            } catch (e) {}
-          }
-          firestoreKeys.push({ id: docSnap.id, ...data });
-          if (data.courseId) {
-            firestoreActiveIds.push(data.courseId);
+          // Single device enforcement: only claim if unclaimed or already matching this device
+          if (!data.activeDeviceId || data.activeDeviceId === deviceId) {
+            if (!data.activeDeviceId) {
+              data.activeDeviceId = deviceId;
+              try {
+                updateDoc(doc(db, 'activation_keys', docSnap.id), { activeDeviceId: deviceId });
+              } catch (e) {}
+            }
+            firestoreKeys.push({ id: docSnap.id, ...data });
+            if (data.courseId) {
+              firestoreActiveIds.push(data.courseId);
+            }
           }
         }
       });
@@ -771,6 +792,8 @@ export default function App() {
     setCurrentUser(null);
     setUserActivationKeys([]);
     setActiveCourseIds([]);
+    setSelectedClassroomCourseId('');
+    setCurrentView('home');
     setAuthName('');
     setShowProfileModal(false);
     setShowUserMenu(false);
@@ -1338,6 +1361,7 @@ export default function App() {
   const [certificateCourseTitle, setCertificateCourseTitle] = useState('AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS');
   const [certificateStudentName, setCertificateStudentName] = useState('');
   const [certificateIssueDate, setCertificateIssueDate] = useState('');
+  const [certificateCode, setCertificateCode] = useState('');
   // Canvas ref for FonePay QR
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -3943,10 +3967,13 @@ export default function App() {
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     <button
                                       onClick={() => {
-                                        const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta';
-                                        setCertificateCourseTitle(course.title);
+                                        const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+                                        const activeCode = keyInfo?.code || getCourseActivationCode(course.id);
+                                        const cleanTitle = course.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                                        setCertificateCourseTitle(cleanTitle);
                                         setCertificateStudentName(studentName);
                                         setCertificateIssueDate(enrolledDateStr);
+                                        setCertificateCode(activeCode);
                                         setShowProfileModal(false);
                                         setShowCertificateModal(true);
                                       }}
@@ -5389,9 +5416,10 @@ export default function App() {
       {/* CERTIFICATE MODAL */}
       {showCertificateModal && (
         <CertificateModal
-          studentName={certificateStudentName || currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Mr. Rajababu Mehta'}
+          studentName={certificateStudentName || currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner'}
           courseTitle={certificateCourseTitle}
           issueDate={certificateIssueDate || '2083/01/14'}
+          certificateId={certificateCode}
           onClose={() => setShowCertificateModal(false)}
         />
       )}

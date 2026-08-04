@@ -2410,6 +2410,23 @@ export default function App() {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => {
+                                const studentName = currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student Learner';
+                                const activeCode = getCourseActivationCode(currentClassroomCourse.id);
+                                const cleanTitle = currentClassroomCourse.title.replace(/by Dhruv Rathee/gi, 'by AI Clipzone').replace(/Dhruv Rathee/gi, 'AI Clipzone');
+                                setCertificateCourseTitle(cleanTitle);
+                                setCertificateStudentName(studentName);
+                                setCertificateIssueDate('2083/01/14');
+                                setCertificateCode(activeCode);
+                                setShowCertificateModal(true);
+                              }}
+                              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer font-sans"
+                              title="Download / View Course Certificate"
+                            >
+                              📜 Course Certificate
+                            </button>
+
                             {isAdminActivated && (
                               <div className="flex gap-2">
                                 <button

@@ -13,7 +13,7 @@ interface CertificateModalProps {
 }
 
 export const CertificateModal: React.FC<CertificateModalProps> = ({
-  studentName = 'Mr. Rajababu Mehta',
+  studentName = 'Student Learner',
   courseTitle,
   issueDate = '2083/01/14',
   certificateId: initialCertId,
@@ -24,7 +24,43 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
-  const certId = initialCertId || `CLIP-${Math.floor(100000 + Math.random() * 900000)}`;
+  // Stable certificate code calculation that never changes randomly on re-renders or page updates
+  const [certId] = useState(() => {
+    if (initialCertId && initialCertId.trim()) {
+      return initialCertId.trim();
+    }
+    const cleanName = (studentName || 'Student').trim();
+    const cleanTitle = (courseTitle || 'Course').trim();
+    const storageKey = `clipzone_cert_code_${cleanName}_${cleanTitle}`;
+    
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return saved;
+    } catch (e) {}
+
+    // Check if there is an active activation code saved locally
+    try {
+      const activeCodes = JSON.parse(localStorage.getItem('clipzone_active_codes') || '[]');
+      if (Array.isArray(activeCodes) && activeCodes.length > 0 && activeCodes[0]) {
+        try { localStorage.setItem(storageKey, activeCodes[0]); } catch (e) {}
+        return activeCodes[0];
+      }
+    } catch (e) {}
+
+    // Fixed hash fallback code (deterministic)
+    let hash = 0;
+    const str = `${cleanName}_${cleanTitle}`;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    const codeNum = Math.abs(hash) % 900000 + 100000;
+    const stableCode = `CLIP-${codeNum}`;
+    try {
+      localStorage.setItem(storageKey, stableCode);
+    } catch (e) {}
+    return stableCode;
+  });
 
   const cleanCourseTitle = (courseTitle || 'AI CONTENT CREATION & DIGITAL DESIGN MASTERCLASS')
     .replace(/by Dhruv Rathee/gi, 'by AI Clipzone')

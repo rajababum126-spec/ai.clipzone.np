@@ -2330,9 +2330,9 @@ export default function App() {
               title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
             >
               <img 
-                src={LOGO_DATA_URL} 
+                src="/pwa-icon.svg" 
                 alt="AI Clipzone Logo"
-                className="w-10 h-10 object-contain rounded-full border border-amber-400/50 shadow-sm bg-slate-900/40 p-0.5 group-hover:scale-105 transition-transform"
+                className="w-10 h-10 object-contain rounded-full border-2 border-amber-400/80 shadow-md bg-slate-950 p-0.5 group-hover:scale-105 transition-transform"
               />
               <h1 className="text-lg md:text-xl font-extrabold tracking-tight flex items-center gap-1">
                 AI Clipzone <span className="text-amber-400">Nepal</span> 🇳🇵

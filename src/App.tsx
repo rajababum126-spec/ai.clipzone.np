@@ -1715,6 +1715,20 @@ export default function App() {
       showToast('✅ Ai Clipzone App is already installed on your device!', 'success');
       return;
     }
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+        if (choiceResult?.outcome === 'accepted') {
+          showToast('🎉 Ai Clipzone App Added to Home Screen!', 'success');
+          setIsAppInstalled(true);
+        }
+        setDeferredPrompt(null);
+        return;
+      } catch (err) {
+        console.warn('Install prompt error:', err);
+      }
+    }
     setShowPwaInstallModal(true);
   };
 
@@ -1736,14 +1750,21 @@ export default function App() {
       }
     }
 
-    // Direct in-app installation progress simulation (no redirects to other sites/tabs)
+    const isInIframe = typeof window !== 'undefined' && window.top !== window.self;
+    if (isInIframe) {
+      window.open(window.location.href, '_blank');
+      showToast('📲 Full Tab मा खुल्यो! Chrome Menu (⋮) -> "Add to Home Screen" थिच्नुहोस्!', 'info');
+      setShowPwaInstallModal(false);
+      return;
+    }
+
     setIsInstallingPwa(true);
     setTimeout(() => {
       setIsInstallingPwa(false);
       setShowPwaInstallModal(false);
       setIsAppInstalled(true);
       showToast('🎉 Ai Clipzone App Added to Home Screen!', 'success');
-    }, 1200);
+    }, 1000);
   };
 
   // Toast helper
@@ -2391,17 +2412,6 @@ export default function App() {
               </button>
             </div>
             <div className="flex items-center gap-2.5">
-              {/* PWA Install Button in Header */}
-              <button
-                onClick={handleInstallPwa}
-                className="bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-full shadow-md flex items-center gap-1.5 transition-all duration-150 cursor-pointer animate-pulse hover:animate-none border border-amber-300/40 shrink-0"
-                title="Install AI Clipzone App on Android / iOS / Desktop"
-              >
-                <Smartphone className="w-3.5 h-3.5 text-slate-950" />
-                <span className="hidden xs:inline">App in Mobile</span>
-                <span className="xs:hidden">App</span> 📲
-              </button>
-
               {/* Dropdown Menu Button */}
               <div className="relative">
                 <button
@@ -5787,44 +5797,6 @@ export default function App() {
           certificateId={certificateCode}
           onClose={() => setShowCertificateModal(false)}
         />
-      )}
-
-      {/* PWA Sticky Bottom Mobile & Desktop Install Banner */}
-      {showInstallBanner && !isAppInstalled && (
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[2000] bg-slate-900/95 backdrop-blur-md text-white p-4 rounded-2xl border border-purple-500/40 shadow-2xl flex items-center justify-between gap-3"
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <img src="/pwa-icon.svg" alt="App Icon" className="w-12 h-12 rounded-xl border border-amber-400/40 shadow-sm shrink-0 bg-purple-950 p-1" />
-            <div className="min-w-0">
-              <h5 className="font-black text-xs md:text-sm text-white flex items-center gap-1.5 truncate">
-                AI Clipzone App 📲
-                <span className="bg-amber-400 text-slate-950 text-[9px] px-1.5 py-0.2 rounded-full font-black">FAST PWA</span>
-              </h5>
-              <p className="text-[11px] text-purple-200 line-clamp-1 font-medium">
-                फोनको होम स्क्रिनमा थप्नुहोस् (No App Store needed)
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleInstallPwa}
-              className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-3 py-1.5 rounded-xl font-black text-xs shadow-md transition cursor-pointer flex items-center gap-1"
-            >
-              Install 📥
-            </button>
-            <button
-              onClick={() => setShowInstallBanner(false)}
-              className="text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </motion.div>
       )}
 
       {/* PWA INSTALLATION NATIVE DIALOG MATCHING USER SCREENSHOT */}

@@ -9,11 +9,12 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 
-// Initialize Firestore with auto-detect long polling for maximum network stability
+// Initialize Firestore with force long polling for rock-solid connection stability in sandboxed environments
 export const db = initializeFirestore(
   app,
   {
     experimentalAutoDetectLongPolling: true,
+    ignoreUndefinedProperties: true,
   },
   firebaseConfig.firestoreDatabaseId
 );

@@ -1,22 +1,43 @@
 {
-  "short_name": "AI Clipzone",
-  "name": "AI Clipzone Nepal - Premium Courses",
+  "short_name": "Ai Clipzone",
+  "name": "Ai Clipzone",
+  "description": "Nepal's #1 AI Learning Platform - Master AI Video Creation, Prompt Engineering & Digital Skills.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#202124",
+  "theme_color": "#202124",
+  "categories": ["education", "productivity", "utilities"],
   "icons": [
     {
-      "src": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=192&q=80",
-      "type": "image/jpeg",
-      "sizes": "192x192"
+      "src": "/pwa-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
     },
     {
-      "src": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=512&q=80",
-      "type": "image/jpeg",
-      "sizes": "512x512"
+      "src": "/apple-touch-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "180x180",
+      "purpose": "any"
     }
   ],
-  "start_url": "/",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
-  "display": "standalone",
-  "orientation": "portrait",
-  "description": "Nepal's #1 AI Premium Courses Web App - AI Clipzone Nepal"
+  "shortcuts": [
+    {
+      "name": "Home",
+      "short_name": "Home",
+      "description": "Browse AI Courses",
+      "url": "/",
+      "icons": [{ "src": "/pwa-icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Classroom",
+      "short_name": "Classroom",
+      "description": "Access Enrolled Courses & Lectures",
+      "url": "/?tab=classroom",
+      "icons": [{ "src": "/pwa-icon.svg", "sizes": "192x192" }]
+    }
+  ]
 }

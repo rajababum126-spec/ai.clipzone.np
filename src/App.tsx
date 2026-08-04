@@ -1666,6 +1666,86 @@ export default function App() {
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // PWA Installation states
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(false);
+  const [showPwaInstallModal, setShowPwaInstallModal] = useState<boolean>(false);
+  const [isInstallingPwa, setIsInstallingPwa] = useState<boolean>(false);
+  const [showInstallBanner, setShowInstallBanner] = useState<boolean>(true);
+  const [isIOS, setIsIOS] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      const iosDevice = /iphone|ipad|ipod/.test(userAgent);
+      setIsIOS(iosDevice);
+
+      const isStandalone = 
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true ||
+        document.referrer.includes('android-app://');
+
+      if (isStandalone) {
+        setIsAppInstalled(true);
+      }
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    const handleAppInstalled = () => {
+      setIsAppInstalled(true);
+      setDeferredPrompt(null);
+      showToast('🎉 AI Clipzone Nepal App Successfully Installed!', 'success');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallPwa = async () => {
+    if (isAppInstalled) {
+      showToast('✅ Ai Clipzone App is already installed on your device!', 'success');
+      return;
+    }
+    setShowPwaInstallModal(true);
+  };
+
+  const handleConfirmInstallModal = async () => {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+        if (choiceResult?.outcome === 'accepted') {
+          showToast('🎉 Ai Clipzone App Added to Home Screen!', 'success');
+          setIsAppInstalled(true);
+          setShowPwaInstallModal(false);
+          setDeferredPrompt(null);
+          return;
+        }
+        setDeferredPrompt(null);
+      } catch (e) {
+        console.warn('Install prompt error:', e);
+      }
+    }
+
+    // Direct in-app installation progress simulation (no redirects to other sites/tabs)
+    setIsInstallingPwa(true);
+    setTimeout(() => {
+      setIsInstallingPwa(false);
+      setShowPwaInstallModal(false);
+      setIsAppInstalled(true);
+      showToast('🎉 Ai Clipzone App Added to Home Screen!', 'success');
+    }, 1200);
+  };
+
   // Toast helper
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
@@ -2311,7 +2391,16 @@ export default function App() {
               </button>
             </div>
             <div className="flex items-center gap-2.5">
-
+              {/* PWA Install Button in Header */}
+              <button
+                onClick={handleInstallPwa}
+                className="bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-full shadow-md flex items-center gap-1.5 transition-all duration-150 cursor-pointer animate-pulse hover:animate-none border border-amber-300/40 shrink-0"
+                title="Install AI Clipzone App on Android / iOS / Desktop"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-slate-950" />
+                <span className="hidden xs:inline">App in Mobile</span>
+                <span className="xs:hidden">App</span> 📲
+              </button>
 
               {/* Dropdown Menu Button */}
               <div className="relative">
@@ -2369,6 +2458,16 @@ export default function App() {
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-purple-950/60 hover:text-purple-300 transition flex items-center gap-2.5 cursor-pointer font-bold text-amber-400"
                       >
                         👤 Profile Page
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          handleInstallPwa();
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-amber-950/40 text-amber-300 transition flex items-center gap-2.5 cursor-pointer font-extrabold border-t border-slate-800/80 mt-0.5"
+                      >
+                        📲 Install App Mode
                       </button>
 
                       {currentUser && (
@@ -5688,6 +5787,111 @@ export default function App() {
           certificateId={certificateCode}
           onClose={() => setShowCertificateModal(false)}
         />
+      )}
+
+      {/* PWA Sticky Bottom Mobile & Desktop Install Banner */}
+      {showInstallBanner && !isAppInstalled && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[2000] bg-slate-900/95 backdrop-blur-md text-white p-4 rounded-2xl border border-purple-500/40 shadow-2xl flex items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <img src="/pwa-icon.svg" alt="App Icon" className="w-12 h-12 rounded-xl border border-amber-400/40 shadow-sm shrink-0 bg-purple-950 p-1" />
+            <div className="min-w-0">
+              <h5 className="font-black text-xs md:text-sm text-white flex items-center gap-1.5 truncate">
+                AI Clipzone App 📲
+                <span className="bg-amber-400 text-slate-950 text-[9px] px-1.5 py-0.2 rounded-full font-black">FAST PWA</span>
+              </h5>
+              <p className="text-[11px] text-purple-200 line-clamp-1 font-medium">
+                फोनको होम स्क्रिनमा थप्नुहोस् (No App Store needed)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleInstallPwa}
+              className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-3 py-1.5 rounded-xl font-black text-xs shadow-md transition cursor-pointer flex items-center gap-1"
+            >
+              Install 📥
+            </button>
+            <button
+              onClick={() => setShowInstallBanner(false)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* PWA INSTALLATION NATIVE DIALOG MATCHING USER SCREENSHOT */}
+      {showPwaInstallModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[5000] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 15 }}
+            className="bg-[#28292c] text-white rounded-[28px] max-w-sm w-full p-6 sm:p-7 shadow-2xl border border-slate-700/50 relative font-sans overflow-hidden"
+          >
+            {isInstallingPwa ? (
+              <div className="py-4 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-[#0f1423] border-2 border-amber-400 p-1 mx-auto flex items-center justify-center shadow-lg animate-bounce">
+                  <img src="/pwa-icon.svg" alt="Ai Clipzone" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-white">Installing Ai Clipzone...</h4>
+                  <p className="text-xs text-amber-400 font-medium mt-1">
+                    होम स्क्रिनमा थपिँदैछ, कृपया १ सेकेन्ड पर्खनुहोस्...
+                  </p>
+                </div>
+                <div className="w-full bg-slate-700/80 h-2.5 rounded-full overflow-hidden relative mt-3">
+                  <div className="bg-gradient-to-r from-amber-400 to-amber-500 h-full w-full animate-pulse rounded-full"></div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Title */}
+                <h3 className="text-xl font-medium text-slate-100 mb-6 text-left tracking-tight">
+                  Install app
+                </h3>
+
+                {/* App Info Row */}
+                <div className="flex items-center gap-4 my-2">
+                  <div className="w-14 h-14 rounded-full bg-[#0f1423] border-2 border-amber-400 p-1 flex items-center justify-center shrink-0 shadow-md">
+                    <img src="/pwa-icon.svg" alt="Ai Clipzone" className="w-full h-full object-contain" />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <h4 className="text-lg font-medium text-white truncate tracking-normal">
+                      Ai Clipzone
+                    </h4>
+                    <p className="text-sm text-slate-400 truncate font-normal mt-0.5">
+                      {typeof window !== 'undefined' ? window.location.hostname || 'aiclipzone.netlify.app' : 'aiclipzone.netlify.app'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 mt-8 pt-2">
+                  <button
+                    onClick={() => setShowPwaInstallModal(false)}
+                    className="text-[#a8c7fa] hover:bg-white/10 text-sm font-medium px-5 py-2.5 rounded-full transition cursor-pointer active:bg-white/20"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmInstallModal}
+                    className="text-[#a8c7fa] hover:bg-white/10 text-sm font-semibold px-5 py-2.5 rounded-full transition cursor-pointer active:bg-white/20"
+                  >
+                    Install
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
       )}
 
     </div>

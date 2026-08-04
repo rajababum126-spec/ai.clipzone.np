@@ -2330,9 +2330,10 @@ export default function App() {
               title={isAdminActivated ? "Admin controls" : "AI Clipzone Nepal - Home"}
             >
               <img 
-                src="/pwa-icon.svg" 
+                src={LOGO_DATA_URL} 
                 alt="AI Clipzone Logo"
-                className="w-10 h-10 object-contain rounded-full border-2 border-amber-400/80 shadow-md bg-slate-950 p-0.5 group-hover:scale-105 transition-transform"
+                className="w-10 h-10 object-cover rounded-full border-2 border-amber-400/80 shadow-md bg-slate-900 group-hover:scale-105 transition-transform shrink-0"
+                referrerPolicy="no-referrer"
               />
               <h1 className="text-lg md:text-xl font-extrabold tracking-tight flex items-center gap-1">
                 AI Clipzone <span className="text-amber-400">Nepal</span> 🇳🇵
@@ -5810,8 +5811,8 @@ export default function App() {
           >
             {isInstallingPwa ? (
               <div className="py-4 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-[#0f1423] border-2 border-amber-400 p-1 mx-auto flex items-center justify-center shadow-lg animate-bounce">
-                  <img src="/pwa-icon.svg" alt="Ai Clipzone" className="w-full h-full object-contain" />
+                <div className="w-16 h-16 rounded-full bg-[#0f1423] border-2 border-amber-400 p-1 mx-auto flex items-center justify-center shadow-lg animate-bounce overflow-hidden">
+                  <img src={LOGO_DATA_URL} alt="Ai Clipzone" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
                 </div>
                 <div>
                   <h4 className="text-lg font-semibold text-white">Installing Ai Clipzone...</h4>
@@ -5832,8 +5833,8 @@ export default function App() {
 
                 {/* App Info Row */}
                 <div className="flex items-center gap-4 my-2">
-                  <div className="w-14 h-14 rounded-full bg-[#0f1423] border-2 border-amber-400 p-1 flex items-center justify-center shrink-0 shadow-md">
-                    <img src="/pwa-icon.svg" alt="Ai Clipzone" className="w-full h-full object-contain" />
+                  <div className="w-14 h-14 rounded-full bg-[#0f1423] border-2 border-amber-400 p-1 flex items-center justify-center shrink-0 shadow-md overflow-hidden">
+                    <img src={LOGO_DATA_URL} alt="Ai Clipzone" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
                   </div>
                   <div className="min-w-0 text-left">
                     <h4 className="text-lg font-medium text-white truncate tracking-normal">

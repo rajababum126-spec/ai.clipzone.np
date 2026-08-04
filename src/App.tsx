@@ -2332,7 +2332,7 @@ export default function App() {
               <img 
                 src={LOGO_DATA_URL} 
                 alt="AI Clipzone Logo"
-                className="w-10 h-10 object-cover rounded-full border-2 border-amber-400/80 shadow-md bg-slate-900 group-hover:scale-105 transition-transform shrink-0"
+                className="w-12 h-12 md:w-[52px] md:h-[52px] object-cover rounded-full border-2 border-amber-400 shadow-md bg-slate-900 group-hover:scale-105 transition-transform shrink-0"
                 referrerPolicy="no-referrer"
               />
               <h1 className="text-lg md:text-xl font-extrabold tracking-tight flex items-center gap-1">

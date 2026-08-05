@@ -184,7 +184,6 @@ export default function App() {
   // Dynamic Courses state
   const [courses, setCourses] = useState<Course[]>(() => {
     const cached = localStorage.getItem('clipzone_dynamic_courses');
-    const wasInitialized = localStorage.getItem('clipzone_courses_initialized');
     const cachedDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
     
     if (cached) {
@@ -192,10 +191,10 @@ export default function App() {
         const parsed: Course[] = JSON.parse(cached);
         return parsed.filter(c => !cachedDeleted.includes(c.id));
       } catch (e) {
-        return wasInitialized ? [] : COURSES.filter(c => !cachedDeleted.includes(c.id));
+        return [];
       }
     }
-    return wasInitialized ? [] : COURSES.filter(c => !cachedDeleted.includes(c.id));
+    return [];
   });
 
   // Keep activeCourseIds strictly in sync with available non-deleted courses
@@ -252,21 +251,17 @@ export default function App() {
   const [formPopularText, setFormPopularText] = useState('🔥 MOST POPULAR - BEST SELLER');
   const [formLanguage, setFormLanguage] = useState('Hindi & Nepali');
   const [formLearnText, setFormLearnText] = useState(''); // newline-separated
-  const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string }[]>([
-    { title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }
-  ]);
+  const [formVideos, setFormVideos] = useState<{ title: string; duration: string; videoUrl: string }[]>([]);
 
-  // Load courses from Firestore & seed if empty ONLY on first ever setup
+  // Load courses from Firestore without auto-seeding default content
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        let isSeeded = false;
         let deletedCourseIds: string[] = [];
         try {
           const configSnap = await getDoc(doc(db, 'system', 'config'));
           if (configSnap.exists()) {
             const data = configSnap.data();
-            if (data.courses_seeded) isSeeded = true;
             if (Array.isArray(data.deletedCourseIds)) {
               deletedCourseIds = data.deletedCourseIds;
             }
@@ -281,61 +276,37 @@ export default function App() {
 
         const querySnapshot = await getDocs(collection(db, 'courses'));
 
-        if (!isSeeded && querySnapshot.empty) {
-          // First time database initialization: seed default static COURSES minus any deleted
-          const seeded = COURSES
-            .filter(course => !deletedCourseIds.includes(course.id))
-            .map((course, idx) => ({
-              ...course,
-              order: idx
-            }));
-          for (const course of seeded) {
-            await setDoc(doc(db, 'courses', course.id), course);
-          }
-          try {
-            await setDoc(doc(db, 'system', 'config'), { courses_seeded: true, deletedCourseIds }, { merge: true });
-          } catch (e) {
-            console.warn('Could not update system config:', e);
-          }
-          setCourses(seeded);
-          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(seeded));
-          localStorage.setItem('clipzone_courses_initialized', 'true');
-          localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(deletedCourseIds));
-        } else {
-          // If docs exist or system was already seeded, do NOT re-seed deleted courses
-          try {
-            await setDoc(doc(db, 'system', 'config'), { courses_seeded: true, deletedCourseIds }, { merge: true });
-          } catch (e) {
-            console.warn('Could not update system config:', e);
-          }
-
-          const dbCourses: Course[] = [];
-          querySnapshot.forEach((docSnap) => {
-            const course = docSnap.data() as Course;
-            if (deletedCourseIds.includes(course.id)) {
-              // Permanently remove lingering document from Firestore if found
-              deleteDoc(doc(db, 'courses', docSnap.id)).catch(err => console.warn('Lingering course delete error:', err));
-            } else {
-              dbCourses.push(course);
-            }
-          });
-
-          // Sort by order
-          const sortedCourses = dbCourses.map((c, i) => ({
-            ...c,
-            order: typeof c.order === 'number' ? c.order : i
-          })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-          setCourses(sortedCourses);
-          localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
-          localStorage.setItem('clipzone_courses_initialized', 'true');
-          localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(deletedCourseIds));
+        try {
+          await setDoc(doc(db, 'system', 'config'), { courses_seeded: true, deletedCourseIds }, { merge: true });
+        } catch (e) {
+          console.warn('Could not update system config:', e);
         }
+
+        const dbCourses: Course[] = [];
+        querySnapshot.forEach((docSnap) => {
+          const course = docSnap.data() as Course;
+          if (deletedCourseIds.includes(course.id)) {
+            // Permanently remove lingering document from Firestore if found
+            deleteDoc(doc(db, 'courses', docSnap.id)).catch(err => console.warn('Lingering course delete error:', err));
+          } else {
+            dbCourses.push(course);
+          }
+        });
+
+        // Sort by order
+        const sortedCourses = dbCourses.map((c, i) => ({
+          ...c,
+          order: typeof c.order === 'number' ? c.order : i
+        })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+        setCourses(sortedCourses);
+        localStorage.setItem('clipzone_dynamic_courses', JSON.stringify(sortedCourses));
+        localStorage.setItem('clipzone_courses_initialized', 'true');
+        localStorage.setItem('clipzone_deleted_course_ids', JSON.stringify(deletedCourseIds));
       } catch (err: any) {
         console.warn('Failed to load courses from Firestore. Falling back to local cache:', err);
         
         const cached = localStorage.getItem('clipzone_dynamic_courses');
-        const wasInitialized = localStorage.getItem('clipzone_courses_initialized');
         const localDeleted: string[] = JSON.parse(localStorage.getItem('clipzone_deleted_course_ids') || '[]');
 
         if (cached) {
@@ -343,10 +314,10 @@ export default function App() {
             const parsed: Course[] = JSON.parse(cached);
             setCourses(parsed.filter(c => !localDeleted.includes(c.id)));
           } catch (jsonErr) {
-            setCourses(wasInitialized ? [] : COURSES.filter(c => !localDeleted.includes(c.id)));
+            setCourses([]);
           }
         } else {
-          setCourses(wasInitialized ? [] : COURSES.filter(c => !localDeleted.includes(c.id)));
+          setCourses([]);
         }
 
         if (err && err.code === 'permission-denied') {
@@ -1803,9 +1774,7 @@ export default function App() {
     setFormPopularText('🔥 MOST POPULAR - BEST SELLER');
     setFormLanguage('Hindi & Nepali');
     setFormLearnText('');
-    setFormVideos([
-      { title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }
-    ]);
+    setFormVideos([]);
     setShowCourseFormModal(true);
   };
 
@@ -1847,7 +1816,7 @@ export default function App() {
       popularText: formIsPopular ? formPopularText : undefined,
       language: formLanguage.trim() || 'Hindi & Nepali',
       order: currentOrder,
-      videos: formVideos.length > 0 ? formVideos : [{ title: 'Intro Video', duration: '12:15', videoUrl: 'https://drive.google.com/file/d/1WW0o2qYql7EvBurHOhUNxsvw9_0qjnm7/preview' }]
+      videos: formVideos
     };
 
     const cleanedCourse = cleanUndefined(updatedCourse);
@@ -2564,9 +2533,7 @@ export default function App() {
                   
                   if (!currentClassroomCourse) return null;
 
-                  const activePlaylist = currentClassroomCourse.videos && currentClassroomCourse.videos.length > 0
-                    ? currentClassroomCourse.videos
-                    : [{ title: 'Introductory Lecture & Overview', duration: '12:15', videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }];
+                  const activePlaylist = currentClassroomCourse.videos || [];
 
                   return (
                     <div className="space-y-8">
@@ -2661,44 +2628,54 @@ export default function App() {
 
                         {/* Beautiful Vertical Playlist Layout */}
                         <div className="space-y-3 mt-6">
-                          {activePlaylist.map((video, idx) => {
-                            const ytId = getYouTubeIdGlobal(video.videoUrl);
+                          {activePlaylist.length > 0 ? (
+                            activePlaylist.map((video, idx) => {
+                              const ytId = getYouTubeIdGlobal(video.videoUrl);
 
-                            return (
-                              <motion.div
-                                key={idx}
-                                whileHover={{ scale: 1.005, x: 2 }}
-                                onClick={() => {
-                                  if (document.documentElement && document.documentElement.requestFullscreen) {
-                                    document.documentElement.requestFullscreen().catch(() => {});
-                                  }
-                                  const securePlayUrl = getSecureYouTubeEmbedUrl(video.videoUrl, true);
-                                  setFullscreenVideo({
-                                    courseTitle: currentClassroomCourse.title,
-                                    title: video.title,
-                                    videoUrl: securePlayUrl,
-                                    idx: idx,
-                                    playlist: activePlaylist,
-                                    courseId: currentClassroomCourse.id,
-                                  });
-                                  showToast(`Opening Lecture ${idx + 1} in Fullscreen! 🎥`, 'success');
-                                }}
-                                className="group bg-white hover:bg-slate-50/70 border border-slate-100 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-4 text-left"
-                              >
-                                {/* Left: Elegant play icon box */}
-                                <div className="w-11 h-11 sm:w-12 sm:h-12 border border-[#FDE8E8]/40 bg-[#FDF2F2] rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                                  <Play className="w-4 h-4 text-[#E02424] fill-[#E02424] ml-0.5" />
-                                </div>
+                              return (
+                                <motion.div
+                                  key={idx}
+                                  whileHover={{ scale: 1.005, x: 2 }}
+                                  onClick={() => {
+                                    if (document.documentElement && document.documentElement.requestFullscreen) {
+                                      document.documentElement.requestFullscreen().catch(() => {});
+                                    }
+                                    const securePlayUrl = getSecureYouTubeEmbedUrl(video.videoUrl, true);
+                                    setFullscreenVideo({
+                                      courseTitle: currentClassroomCourse.title,
+                                      title: video.title,
+                                      videoUrl: securePlayUrl,
+                                      idx: idx,
+                                      playlist: activePlaylist,
+                                      courseId: currentClassroomCourse.id,
+                                    });
+                                    showToast(`Opening Lecture ${idx + 1} in Fullscreen! 🎥`, 'success');
+                                  }}
+                                  className="group bg-white hover:bg-slate-50/70 border border-slate-100 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-4 text-left"
+                                >
+                                  {/* Left: Elegant play icon box */}
+                                  <div className="w-11 h-11 sm:w-12 sm:h-12 border border-[#FDE8E8]/40 bg-[#FDF2F2] rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                    <Play className="w-4 h-4 text-[#E02424] fill-[#E02424] ml-0.5" />
+                                  </div>
 
-                                {/* Center: Text Info */}
-                                <div className="flex-1 min-w-0">
-                                  <h5 className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-purple-700 transition-colors leading-snug font-sans">
-                                    {video.title}
-                                  </h5>
-                                </div>
-                              </motion.div>
-                            );
-                          })}
+                                  {/* Center: Text Info */}
+                                  <div className="flex-1 min-w-0">
+                                    <h5 className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-purple-700 transition-colors leading-snug font-sans">
+                                      {video.title}
+                                    </h5>
+                                  </div>
+                                </motion.div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-100 p-6 space-y-2">
+                              <div className="text-3xl">📹</div>
+                              <h5 className="text-sm font-bold text-slate-700 font-sans">कुनै भिडियो लेक्चरहरू उपलब्ध छैनन्</h5>
+                              <p className="text-xs text-slate-500 font-sans">
+                                एडमिनले प्लेलिस्टमा भिडियो थपेपछि यहाँ देखिनेछ। (Videos added by admin will appear here.)
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     </div>
@@ -2762,165 +2739,162 @@ export default function App() {
           )
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10">
-              {courses.map((course, index) => (
-                <motion.div
-                  key={course.id}
-                  id={`course-card-${course.id}`}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-50px' }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  whileHover={{ y: -6 }}
-                  className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full scroll-mt-28"
-                >
-                  {course.isPopular && (
-                    <div className="absolute top-0 inset-x-0 bg-rose-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
-                      {course.popularText || '🔥 MOST POPULAR - BEST SELLER'}
-                    </div>
-                  )}
+              {courses.length > 0 ? (
+                courses.map((course, index) => (
+                  <motion.div
+                    key={course.id}
+                    id={`course-card-${course.id}`}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-50px' }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    whileHover={{ y: -6 }}
+                    className="group bg-white rounded-3xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-300 relative flex flex-col h-full scroll-mt-28"
+                  >
+                    {course.isPopular && (
+                      <div className="absolute top-0 inset-x-0 bg-rose-600 text-white text-center py-2 text-xs md:text-sm font-black tracking-widest uppercase z-10 shadow-md">
+                        {course.popularText || '🔥 MOST POPULAR - BEST SELLER'}
+                      </div>
+                    )}
 
-                  {/* Course Thumbnail Image */}
-                  <div className="relative aspect-video overflow-hidden bg-slate-950">
-                    <img 
-                      src={course.image} 
-                      alt={course.title}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                      <span className="bg-purple-950/80 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-lg border border-purple-500/20">
-                        Lifetime Access
-                      </span>
-                      <span className="bg-amber-500 text-slate-950 text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
-                        Instant Delivery
-                      </span>
+                    {/* Course Thumbnail Image */}
+                    <div className="relative aspect-video overflow-hidden bg-slate-950">
+                      <img 
+                        src={course.image} 
+                        alt={course.title}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
+                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                        <span className="bg-purple-950/80 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-lg border border-purple-500/20">
+                          Lifetime Access
+                        </span>
+                        <span className="bg-amber-500 text-slate-950 text-xs font-extrabold px-3 py-1 rounded-lg shadow-md">
+                          Instant Delivery
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Course Info */}
-                  <div className="p-6 md:p-8 flex flex-col grow justify-between">
-                    <div className="text-left font-sans">
-                      <h4 className="text-xl md:text-2xl font-extrabold text-slate-900 group-hover:text-purple-700 transition-colors">
-                        {course.title}
-                      </h4>
-                      
-                      {/* Prices or Active status badge */}
-                      <div className="mt-4 flex items-center justify-between">
-                        {activeCourseIds.includes(course.id) ? (
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Course Activated
-                          </span>
-                        ) : (
-                          <div className="flex items-baseline gap-2.5">
-                            <span className="text-2xl md:text-3xl font-black text-purple-700">
-                              {course.price}
+                    {/* Course Info */}
+                    <div className="p-6 md:p-8 flex flex-col grow justify-between">
+                      <div className="text-left font-sans">
+                        <h4 className="text-xl md:text-2xl font-extrabold text-slate-900 group-hover:text-purple-700 transition-colors">
+                          {course.title}
+                        </h4>
+                        
+                        {/* Prices or Active status badge */}
+                        <div className="mt-4 flex items-center justify-between">
+                          {activeCourseIds.includes(course.id) ? (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              Course Activated
                             </span>
-                            {course.isPopular && (
-                              <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
-                                Price Rs. 1000
+                          ) : (
+                            <div className="flex items-baseline gap-2.5">
+                              <span className="text-2xl md:text-3xl font-black text-purple-700">
+                                {course.price}
                               </span>
-                            )}
-                          </div>
-                        )}
+                              {course.isPopular && (
+                                <span className="text-slate-400 line-through text-sm md:text-base font-semibold">
+                                  Price Rs. 1000
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
+                          {activeCourseIds.includes(course.id) && (() => {
+                            const vList = course.videos || [];
+                            const chSet = new Set(vList.map(v => v.chapterTitle?.trim() || 'Chapter 1: Course Lectures'));
+                            return (
+                              <span className="bg-purple-100/80 text-purple-900 text-xs font-extrabold px-3 py-1 rounded-xl border border-purple-200/80 flex items-center gap-1.5 shadow-2xs">
+                                <span className="w-4 h-4 rounded-md bg-purple-600 text-white flex items-center justify-center text-[9px] font-black">📁</span>
+                                {chSet.size} Chapters ({vList.length} Video Lectures)
+                              </span>
+                            );
+                          })()}
+                          <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-xl border border-slate-200">
+                            🌐 {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
+                          </span>
+                          <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-xl border border-emerald-200">
+                            📜 Certificate
+                          </span>
+                        </div>
+
+                        {/* Highlights checklist */}
+                        <ul className="mt-6 space-y-2.5">
+                          {course.learn.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2.5 text-xs md:text-sm text-slate-600 font-medium">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 mt-3">
-                        {activeCourseIds.includes(course.id) && (() => {
-                          const vList = course.videos || [];
-                          const chSet = new Set(vList.map(v => v.chapterTitle?.trim() || 'Chapter 1: Course Lectures'));
-                          return (
-                            <span className="bg-purple-100/80 text-purple-900 text-xs font-extrabold px-3 py-1 rounded-xl border border-purple-200/80 flex items-center gap-1.5 shadow-2xs">
-                              <span className="w-4 h-4 rounded-md bg-purple-600 text-white flex items-center justify-center text-[9px] font-black">📁</span>
-                              {chSet.size} Chapters ({vList.length} Video Lectures)
-                            </span>
-                          );
-                        })()}
-                        <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-xl border border-slate-200">
-                          🌐 {course.language || (course.id.includes('rathee') || course.id.includes('presentation') ? 'Hindi & Nepali' : 'Nepali')}
-                        </span>
-                        <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-xl border border-emerald-200">
-                          📜 Certificate
-                        </span>
-                      </div>
-
-                      {/* Highlights checklist */}
-                      <ul className="mt-6 space-y-2.5">
-                        {course.learn.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2.5 text-slate-600 text-sm">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="mt-8">
-                      {activeCourseIds.includes(course.id) ? (
-                        <button 
-                          onClick={() => {
-                            setSelectedClassroomCourseId(course.id);
-                            setCurrentView('classroom');
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                            showToast(`Opening "${course.title}" Playlist! 🎥`, 'info');
-                          }}
-                          className="w-full bg-linear-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-emerald-500/15 transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-2 font-sans"
-                        >
-                          🎥 Open Playlist / Watch Now
-                        </button>
-                      ) : (
-                        <button 
+                      {/* Enrolment / Classroom Access Button */}
+                      <div className="mt-8 pt-6 border-t border-slate-100 flex items-center gap-3">
+                        <button
                           onClick={() => handleEnrollCourse(course)}
-                          className="w-full bg-linear-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white font-extrabold text-sm py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-2 font-sans"
+                          className="flex-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs md:text-sm py-3.5 px-4 rounded-2xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-purple-900/10 font-sans"
                         >
-                          🚀 Enroll Now / View Details
+                          {activeCourseIds.includes(course.id) ? (
+                            <>
+                              🎓 Go to Classroom
+                              <ArrowRight className="w-4 h-4" />
+                            </>
+                          ) : (
+                            <>
+                              <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                              Enroll & Activate Course
+                            </>
+                          )}
                         </button>
-                      )}
 
-                      {isAdminActivated && (
-                        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
-                          <div className="flex gap-3">
+                        {/* Admin Inline Controls */}
+                        {isAdminActivated && (
+                          <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleEditCourseClick(course)}
-                              className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                              className="bg-amber-100 hover:bg-amber-200 text-amber-900 p-3 rounded-2xl transition cursor-pointer font-sans"
+                              title="Edit Course"
                             >
-                              ✏️ Edit Course
+                              ✏️
                             </button>
                             <button
                               onClick={() => handleDeleteCourse(course.id)}
-                              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                              className="bg-rose-100 hover:bg-rose-200 text-rose-900 p-3 rounded-2xl transition cursor-pointer font-sans"
+                              title="Delete Course"
                             >
-                              🗑️ Delete
+                              🗑️
                             </button>
                           </div>
-                          <div className="flex gap-2 justify-between items-center bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                            <span className="text-[10px] font-black uppercase text-slate-400 pl-1.5">Move/Reorder:</span>
-                            <div className="flex gap-1.5">
-                              <button
-                                disabled={index === 0}
-                                onClick={() => handleMoveCourse(index, 'up')}
-                                className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                                title="Move Course Up/Left"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                disabled={index === courses.length - 1}
-                                onClick={() => handleMoveCourse(index, 'down')}
-                                className="bg-slate-200 hover:bg-slate-300 disabled:opacity-40 disabled:hover:bg-slate-200 text-slate-700 font-bold p-1.5 rounded-lg transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                                title="Move Course Down/Right"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 max-w-xl mx-auto space-y-3">
+                  <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-2xl mx-auto font-bold font-sans">
+                    📚
                   </div>
-                </motion.div>
-              ))}
+                  <h4 className="text-lg font-extrabold text-slate-900 font-sans">कुनै कोर्ष उपलब्ध छैन</h4>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed font-sans">
+                    एडमिन प्यानलबाट नयाँ कोर्षहरू थपिएपछि यहाँ देखिनेछन्।
+                  </p>
+                  {isAdminActivated && (
+                    <button
+                      onClick={handleCreateCourseClick}
+                      className="mt-2 bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs py-2.5 px-5 rounded-xl transition cursor-pointer shadow-md font-sans"
+                    >
+                      ➕ Add New Course (Admin)
+                    </button>
+                  )}
+                </div>
+              )}
 
               {isAdminActivated && (
                 <motion.div

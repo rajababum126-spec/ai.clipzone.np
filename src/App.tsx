@@ -50,7 +50,12 @@ import {
   Copy,
   Zap,
   RotateCcw,
-  Wand2
+  Wand2,
+  HardDriveDownload,
+  Lock,
+  ShieldAlert,
+  Trash2,
+  WifiOff
 } from 'lucide-react';
 
 import { COURSES, TESTIMONIALS, FAQS } from './data';
@@ -60,6 +65,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { db, auth } from './firebase';
 import { CertificateModal } from './components/CertificateModal';
 import { LOGO_DATA_URL } from './logo';
+import { isAppMode, saveVideoOffline, getOfflineVideos, deleteOfflineVideo, OfflineVideo } from './utils/offlineManager';
 
 enum OperationType {
   CREATE = 'create',
@@ -213,6 +219,152 @@ export default function App() {
       console.warn('Active courses cleanup err:', e);
     }
   }, [courses]);
+
+  // Standalone App Mode & In-App Offline Video storage states
+  const [isAppStandalone, setIsAppStandalone] = useState<boolean>(() => isAppMode());
+  const [offlineVideosList, setOfflineVideosList] = useState<OfflineVideo[]>([]);
+  const [downloadedMap, setDownloadedMap] = useState<Record<string, boolean>>({});
+  const [downloadingVideoId, setDownloadingVideoId] = useState<string | null>(null);
+  const [showOfflineVault, setShowOfflineVault] = useState<boolean>(false);
+  const [isScreenShieldActive, setIsScreenShieldActive] = useState<boolean>(false);
+
+  // Monitor Standalone App Mode changes
+  useEffect(() => {
+    const updateAppMode = () => setIsAppStandalone(isAppMode());
+    updateAppMode();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', updateAppMode);
+      const media = window.matchMedia('(display-mode: standalone)');
+      try {
+        media.addEventListener('change', updateAppMode);
+      } catch (e) {
+        try { (media as any).addListener(updateAppMode); } catch (err) {}
+      }
+      return () => {
+        window.removeEventListener('resize', updateAppMode);
+        try { media.removeEventListener('change', updateAppMode); } catch (e) {}
+      };
+    }
+  }, []);
+
+  // Reload offline stored videos from IndexedDB
+  const reloadOfflineVideos = async () => {
+    try {
+      const list = await getOfflineVideos();
+      setOfflineVideosList(list);
+      const map: Record<string, boolean> = {};
+      list.forEach(v => { map[v.id] = true; });
+      setDownloadedMap(map);
+    } catch (err) {
+      console.warn('Error fetching offline videos:', err);
+    }
+  };
+
+  useEffect(() => {
+    reloadOfflineVideos();
+  }, []);
+
+  // DRM Anti-Screen Recording & Anti-Screenshot Protection Listener
+  useEffect(() => {
+    if (!fullscreenVideo) {
+      setIsScreenShieldActive(false);
+      return;
+    }
+
+    const handleBlur = () => {
+      // Screen recorder or app switcher / snippet tool lost window focus
+      setIsScreenShieldActive(true);
+    };
+
+    const handleFocus = () => {
+      setTimeout(() => {
+        setIsScreenShieldActive(false);
+      }, 800);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsScreenShieldActive(true);
+      } else {
+        setTimeout(() => {
+          setIsScreenShieldActive(false);
+        }, 800);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === 'PrintScreen' ||
+        (e.metaKey && e.shiftKey && ['3', '4', '5'].includes(e.key)) ||
+        (e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'S'].includes(e.key.toUpperCase())) ||
+        (e.ctrlKey && e.key.toUpperCase() === 'P') ||
+        e.key === 'F12'
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsScreenShieldActive(true);
+        showToast('🚫 Screen Capture / Screenshot disabled during playback! (AI Clipzone Security)', 'warning');
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [fullscreenVideo]);
+
+  // Handle Offline Download in App Mode
+  const handleToggleOfflineDownload = async (e: React.MouseEvent, course: Course, video: CourseVideo, videoIdx: number) => {
+    e.stopPropagation();
+    if (!isAppStandalone) {
+      showToast('📲 Download option App Mode भित्र मात्र उपलब्ध छ! (Please install and open in App Mode)', 'info');
+      setShowPwaInstallModal(true);
+      return;
+    }
+
+    const videoId = `${course.id}_${videoIdx}_${video.title.replace(/\s+/g, '_')}`;
+    const isDownloaded = !!downloadedMap[videoId];
+
+    if (isDownloaded) {
+      await deleteOfflineVideo(videoId);
+      await reloadOfflineVideos();
+      showToast('🗑️ App बाट अफलाइन भिडियो हटाइयो!', 'info');
+    } else {
+      setDownloadingVideoId(videoId);
+      showToast('📥 Downloading video inside App... (App भित्र सुरक्षित गरिँदैछ)', 'info');
+
+      setTimeout(async () => {
+        const offlineItem: OfflineVideo = {
+          id: videoId,
+          courseId: course.id,
+          courseTitle: course.title,
+          title: video.title,
+          chapterTitle: video.chapterTitle,
+          duration: video.duration,
+          videoUrl: video.videoUrl,
+          downloadedAt: Date.now(),
+          offlineReady: true
+        };
+
+        const success = await saveVideoOffline(offlineItem);
+        setDownloadingVideoId(null);
+        if (success) {
+          await reloadOfflineVideos();
+          showToast('✅ App भित्र Offline हेर्न सुरक्षित गरियो! (Saved in App Storage)', 'success');
+        } else {
+          showToast('⚠️ Storage limit or error while saving video offline.', 'warning');
+        }
+      }, 1000);
+    }
+  };
 
 
 
@@ -2626,11 +2778,13 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Beautiful Vertical Playlist Layout */}
+                        {/* Beautiful Vertical Playlist Layout with In-App Offline Downloads */}
                         <div className="space-y-3 mt-6">
                           {activePlaylist.length > 0 ? (
                             activePlaylist.map((video, idx) => {
-                              const ytId = getYouTubeIdGlobal(video.videoUrl);
+                              const videoId = `${currentClassroomCourse.id}_${idx}_${video.title.replace(/\s+/g, '_')}`;
+                              const isDownloaded = !!downloadedMap[videoId];
+                              const isDownloading = downloadingVideoId === videoId;
 
                               return (
                                 <motion.div
@@ -2651,19 +2805,67 @@ export default function App() {
                                     });
                                     showToast(`Opening Lecture ${idx + 1} in Fullscreen! 🎥`, 'success');
                                   }}
-                                  className="group bg-white hover:bg-slate-50/70 border border-slate-100 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-4 text-left"
+                                  className="group bg-white hover:bg-slate-50/70 border border-slate-100 rounded-2xl p-3 cursor-pointer transition-all duration-150 flex items-center gap-3 sm:gap-4 text-left shadow-xs"
                                 >
                                   {/* Left: Elegant play icon box */}
-                                  <div className="w-11 h-11 sm:w-12 sm:h-12 border border-[#FDE8E8]/40 bg-[#FDF2F2] rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                                  <div className="w-10 h-10 sm:w-12 sm:h-12 border border-[#FDE8E8]/40 bg-[#FDF2F2] rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                                     <Play className="w-4 h-4 text-[#E02424] fill-[#E02424] ml-0.5" />
                                   </div>
 
                                   {/* Center: Text Info */}
                                   <div className="flex-1 min-w-0">
-                                    <h5 className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-purple-700 transition-colors leading-snug font-sans">
+                                    <h5 className="text-xs sm:text-base font-bold text-slate-800 group-hover:text-purple-700 transition-colors leading-snug font-sans">
                                       {video.title}
                                     </h5>
+                                    {video.duration && (
+                                      <span className="text-[10px] sm:text-xs text-slate-400 font-sans font-medium">
+                                        ⏱️ {video.duration} mins
+                                      </span>
+                                    )}
                                   </div>
+
+                                  {/* Right: In-App Only Download Action */}
+                                  {isAppStandalone ? (
+                                    <button
+                                      onClick={(e) => handleToggleOfflineDownload(e, currentClassroomCourse, video, idx)}
+                                      disabled={isDownloading}
+                                      className={`px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shrink-0 font-sans ${
+                                        isDownloaded
+                                          ? 'bg-emerald-50 text-emerald-700 hover:bg-rose-50 hover:text-rose-700 border border-emerald-200 hover:border-rose-200'
+                                          : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/80 shadow-2xs'
+                                      }`}
+                                      title={isDownloaded ? 'App बाट हटाउनुहोस् (Delete offline copy)' : 'App भित्र Offline Save गर्नुहोस्'}
+                                    >
+                                      {isDownloading ? (
+                                        <>
+                                          <span className="w-3.5 h-3.5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
+                                          <span className="text-[10px]">Saving...</span>
+                                        </>
+                                      ) : isDownloaded ? (
+                                        <>
+                                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                          <span className="hidden sm:inline text-[11px]">Saved Offline</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <HardDriveDownload className="w-4 h-4 text-purple-600 shrink-0" />
+                                          <span className="hidden sm:inline text-[11px]">App Offline</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <span 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowPwaInstallModal(true);
+                                      }}
+                                      className="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-200 border border-slate-200 px-2.5 py-1.5 rounded-lg cursor-pointer transition flex items-center gap-1 shrink-0 font-sans"
+                                      title="Install App to enable In-App Offline Download"
+                                    >
+                                      <Smartphone className="w-3 h-3 text-slate-500" />
+                                      <span className="hidden sm:inline">App Download Only</span>
+                                    </span>
+                                  )}
                                 </motion.div>
                               );
                             })
@@ -5626,6 +5828,39 @@ export default function App() {
               }`}
               style={getRotationStyle()}
             >
+              {/* DRM Anti-Screen Recording & Anti-Screenshot Protection Shield */}
+              {isScreenShieldActive && (
+                <div className="absolute inset-0 z-[20000] bg-slate-950 flex flex-col items-center justify-center text-center p-6 text-white font-sans space-y-4 select-none">
+                  <div className="w-16 h-16 rounded-full bg-rose-500/20 border border-rose-500 text-rose-500 flex items-center justify-center text-3xl animate-pulse shadow-2xl">
+                    <ShieldAlert className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl md:text-2xl font-extrabold text-white tracking-tight font-sans">
+                    🚫 Screen Recording & Screenshot Blocked
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-md leading-relaxed font-medium font-sans">
+                    सुरक्षाको लागि भिडियो चलिरहेको बेला Screen Capture वा Recording गर्न मनाही छ। AI Clipzone Anti-Piracy Protection Active.
+                  </p>
+                  <button
+                    onClick={() => setIsScreenShieldActive(false)}
+                    className="mt-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-6 py-3 rounded-xl transition cursor-pointer shadow-lg active:scale-95 font-sans"
+                  >
+                    Resume Video Playback ▶️
+                  </button>
+                </div>
+              )}
+
+              {/* Dynamic Anti-Piracy Watermark */}
+              <div className="absolute inset-0 pointer-events-none z-[120] overflow-hidden flex items-center justify-center select-none opacity-20">
+                <div className="transform -rotate-12 space-y-6 text-center animate-pulse">
+                  <p className="text-xs md:text-sm font-mono font-black text-amber-300 tracking-widest uppercase bg-slate-950/90 px-4 py-2 rounded-full border border-amber-400/30 shadow-2xl">
+                    🔒 {currentUser?.displayName || authName || localStorage.getItem('clipzone_student_name') || 'Student User'} • {currentUser?.email || 'Verified App Session'}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-200 font-bold tracking-wider">
+                    AI CLIPZONE NEPAL ANTI-PIRACY DRM • DO NOT RECORD SCREEN
+                  </p>
+                </div>
+              </div>
+
               {/* Context guard to prevent direct saving */}
               <div 
                 onContextMenu={(e) => e.preventDefault()}
